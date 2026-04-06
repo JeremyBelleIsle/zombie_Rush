@@ -10,6 +10,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"os"
+	"zombie_rush/diamond"
 
 	"github.com/JeremyBelleIsle/gameutil"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -17,6 +18,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
+	// "diamond"
 )
 
 const (
@@ -55,12 +57,6 @@ type miniatureCard struct {
 	img     *ebiten.Image
 }
 
-type diamond struct {
-	x, y, r                float64
-	detectedInPickupRadius bool
-	img                    *ebiten.Image
-}
-
 type tree struct {
 	Img     *ebiten.Image
 	x, y, s float64
@@ -91,7 +87,7 @@ type Game struct {
 	zombieSpawnCooldown float64
 	player              player
 	cards               []card
-	diamonds            []diamond
+	diamonds            []diamond.Diamond
 	bullets             []bullet
 	zombies             []zombie
 	trees               []tree
@@ -160,7 +156,7 @@ func (g *Game) reset() {
 	g.player.speed = 10
 	g.bossCooldown = 1800
 	g.bullets = []bullet{}
-	g.diamonds = []diamond{}
+	g.diamonds = []diamond.Diamond{}
 	g.cards = []card{}
 	g.zombies = []zombie{}
 	g.upgrades = map[string]int{
@@ -201,22 +197,22 @@ func (g *Game) Update() error {
 			bulletHitZombie, zi, bi := BulletHitZombie(g.zombies, g.bullets, g.mapX, g.mapY)
 
 			if bulletHitZombie {
-				SpawnDiamond(&g.diamonds, g.zombies[zi].x, g.zombies[zi].y, 56) // <-- MODIFIÉ : Rayon du diamant fixe à 56
+				diamond.Spawn(&g.diamonds, g.zombies[zi].x, g.zombies[zi].y, 56, diamondImg) // <-- MODIFIÉ : Rayon du diamant fixe à 56
 
 				g.zombies, g.bullets = BulletHitZombieReaction(zi, bi, g.zombies, g.bullets, g.upgrades, &g.player.lifes, &g.bossCooldown)
 			}
 
 			// <-- MODIFIÉ : Utilise g.player.pickupRadius au lieu de g.player.r pour ramasser
-			diamondPickup, di := DiamondXpickupRadius(g.player.x, g.player.y, g.player.pickupRadius, g.mapX, g.mapY, g.diamonds)
+			diamondPickup, di := diamond.PickupRadius(g.player.x, g.player.y, g.player.pickupRadius, g.mapX, g.mapY, g.diamonds)
 
 			if diamondPickup {
 				fmt.Println(lineSeparation)
 				fmt.Println("diamond/player collision")
 
-				g.diamonds[di].detectedInPickupRadius = true
+				g.diamonds[di].DetectedInPickupRadius = true
 			}
 
-			g.diamonds = DragDiamondsToPlayer(g.diamonds, playerWorldX, playerWorldY, &g.player.diamond)
+			g.diamonds = diamond.DragToPlayer(g.diamonds, playerWorldX, playerWorldY, &g.player.diamond)
 
 			CreateCards(&g.cards, &g.player.diamond, &g.player.diamondQuota)
 
@@ -306,17 +302,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		vector.StrokeCircle(screen, float32(g.player.x), float32(g.player.y), float32(g.player.pickupRadius), 2, color.RGBA{0, 0, 120, 120}, true)
 
 		for _, d := range g.diamonds {
-			op := &ebiten.DrawImageOptions{}
-
-			op.GeoM.Scale(0.3, 0.3)
-
-			op.GeoM.Translate((d.x+g.mapX)-70, (d.y+g.mapY)-70)
-
-			if d.img == nil {
-				panic(g.diamonds)
-			}
-
-			screen.DrawImage(d.img, op)
+			d.Draw(screen, g.mapX, g.mapY)
 		}
 
 		for _, t := range g.trees {
