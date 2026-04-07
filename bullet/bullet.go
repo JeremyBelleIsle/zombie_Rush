@@ -1,4 +1,4 @@
-package main
+package bullet
 
 import (
 	"image/color"
@@ -8,9 +8,18 @@ import (
 	"zombie_rush/zombie"
 
 	"github.com/JeremyBelleIsle/gameutil"
+	"github.com/hajimehoshi/ebiten/v2"
 )
 
-func BulletHitZombie(zombies []zombie.Zombie, bullets []bullet, WX, WY float64) (bool, int, int) {
+type Bullet struct {
+	img        *ebiten.Image
+	x, y, w, h float64
+	angle      float64
+	vx, vy     float64
+	clr        color.RGBA
+}
+
+func HitZombie(zombies []zombie.Zombie, bullets []Bullet, WX, WY float64) (bool, int, int) {
 
 	for i, z := range zombies {
 
@@ -27,7 +36,7 @@ func BulletHitZombie(zombies []zombie.Zombie, bullets []bullet, WX, WY float64) 
 
 }
 
-func CreateBullet(px, py, pWorldX, pWorldY float64, playerAngle *float64, shootRange float64, cadence float64, zombies []zombie.Zombie, bullets []bullet, cooldown *int) []bullet {
+func Create(px, py, pWorldX, pWorldY float64, playerAngle *float64, shootRange float64, cadence float64, zombies []zombie.Zombie, bullets []Bullet, cooldown *int, bulletImg *ebiten.Image) []Bullet {
 	// 1. Gestion du délai de tir
 	if *cooldown > 0 {
 		*cooldown--
@@ -64,7 +73,7 @@ func CreateBullet(px, py, pWorldX, pWorldY float64, playerAngle *float64, shootR
 		bulletSpeed := 15.0
 
 		// On ajoute la balle aux coordonnées de l'écran (px, py) comme tu l'as précisé
-		bullets = append(bullets, bullet{
+		bullets = append(bullets, Bullet{
 			x:     px,
 			y:     py,
 			w:     16,
@@ -80,7 +89,7 @@ func CreateBullet(px, py, pWorldX, pWorldY float64, playerAngle *float64, shootR
 	return bullets
 }
 
-func MoveBullets(bullets []bullet, px, py float64) []bullet {
+func Move(bullets []Bullet, px, py float64) []Bullet {
 	for i := len(bullets) - 1; i >= 0; i-- {
 		bullets[i].x += bullets[i].vx
 		bullets[i].y += bullets[i].vy
@@ -95,7 +104,7 @@ func MoveBullets(bullets []bullet, px, py float64) []bullet {
 	return bullets
 }
 
-func BulletHitZombieReaction(zombieIndex int, bulletIndex int, zombies []zombie.Zombie, bullets []bullet, upgrades map[string]int, lifes *int, bossCooldown *int) ([]zombie.Zombie, []bullet) {
+func HitZombieReaction(zombieIndex int, bulletIndex int, zombies []zombie.Zombie, bullets []Bullet, upgrades map[string]int, lifes *int, bossCooldown *int) ([]zombie.Zombie, []Bullet) {
 
 	zombies[zombieIndex].Health--
 
@@ -117,4 +126,24 @@ func BulletHitZombieReaction(zombieIndex int, bulletIndex int, zombies []zombie.
 	}
 
 	return zombies, bullets
+}
+
+func (b Bullet) Draw(screen *ebiten.Image) {
+	if b.img == nil {
+		return
+	}
+	op := &ebiten.DrawImageOptions{}
+
+	w := b.img.Bounds().Dx()
+	h := b.img.Bounds().Dy()
+
+	op.GeoM.Translate(-float64(w)/2, -float64(h)/2)
+
+	op.GeoM.Rotate(b.angle)
+
+	op.GeoM.Scale(.14, .14)
+
+	op.GeoM.Translate(b.x, b.y)
+
+	screen.DrawImage(b.img, op)
 }

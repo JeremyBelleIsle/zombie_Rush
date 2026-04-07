@@ -9,6 +9,7 @@ import (
 	"log"
 	"math/rand/v2"
 	"os"
+	"zombie_rush/bullet"
 	"zombie_rush/diamond"
 	"zombie_rush/zombie"
 
@@ -61,14 +62,6 @@ type tree struct {
 	x, y, s float64
 }
 
-type bullet struct {
-	img        *ebiten.Image
-	x, y, w, h float64
-	angle      float64
-	vx, vy     float64
-	clr        color.RGBA
-}
-
 type Game struct {
 	bossCooldown        int
 	state               int
@@ -77,7 +70,7 @@ type Game struct {
 	player              player
 	cards               []card
 	diamonds            []diamond.Diamond
-	bullets             []bullet
+	bullets             []bullet.Bullet
 	zombies             []zombie.Zombie
 	trees               []tree
 	miniatureCard       miniatureCard
@@ -144,7 +137,7 @@ func (g *Game) reset() {
 	g.player.shootCooldown = 60
 	g.player.speed = 10
 	g.bossCooldown = 1800
-	g.bullets = []bullet{}
+	g.bullets = []bullet.Bullet{}
 	g.diamonds = []diamond.Diamond{}
 	g.cards = []card{}
 	g.zombies = []zombie.Zombie{}
@@ -180,15 +173,15 @@ func (g *Game) Update() error {
 
 			g.zombies = zombie.Spawn(g.zombies, &g.addZombieCooldown, zombieImg, screenWidth, screenHeight)
 
-			g.bullets = CreateBullet(g.player.x, g.player.y, playerWorldX, playerWorldY, &g.player.angle, g.player.shootRange, g.player.cadence, g.zombies, g.bullets, &g.player.shootCooldown)
-			MoveBullets(g.bullets, g.player.x, g.player.y)
+			g.bullets = bullet.Create(g.player.x, g.player.y, playerWorldX, playerWorldY, &g.player.angle, g.player.shootRange, g.player.cadence, g.zombies, g.bullets, &g.player.shootCooldown, bulletImg)
+			bullet.Move(g.bullets, g.player.x, g.player.y)
 
-			bulletHitZombie, zi, bi := BulletHitZombie(g.zombies, g.bullets, g.mapX, g.mapY)
+			bulletHitZombie, zi, bi := bullet.HitZombie(g.zombies, g.bullets, g.mapX, g.mapY)
 
 			if bulletHitZombie {
 				diamond.Spawn(&g.diamonds, g.zombies[zi].X, g.zombies[zi].Y, 56, diamondImg)
 
-				g.zombies, g.bullets = BulletHitZombieReaction(zi, bi, g.zombies, g.bullets, g.upgrades, &g.player.lifes, &g.bossCooldown)
+				g.zombies, g.bullets = bullet.HitZombieReaction(zi, bi, g.zombies, g.bullets, g.upgrades, &g.player.lifes, &g.bossCooldown)
 			}
 
 			// <-- MODIFIÉ : Utilise g.player.pickupRadius au lieu de g.player.r pour ramasser
@@ -325,27 +318,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	screen.DrawImage(g.player.img, op)
 
 	for _, b := range g.bullets {
-		if b.img == nil {
-			continue
-		}
-		op := &ebiten.DrawImageOptions{}
-
-		if b.img == nil {
-			print("")
-		}
-
-		w := b.img.Bounds().Dx()
-		h := b.img.Bounds().Dy()
-
-		op.GeoM.Translate(-float64(w)/2, -float64(h)/2)
-
-		op.GeoM.Rotate(b.angle)
-
-		op.GeoM.Scale(.14, .14)
-
-		op.GeoM.Translate(b.x, b.y)
-
-		screen.DrawImage(b.img, op)
+		b.Draw(screen)
 	}
 
 	// jauge de vie du player
