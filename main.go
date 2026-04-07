@@ -7,10 +7,10 @@ import (
 	"image/color"
 	"image/png"
 	"log"
-	"math"
 	"math/rand/v2"
 	"os"
 	"zombie_rush/diamond"
+	"zombie_rush/zombie"
 
 	"github.com/JeremyBelleIsle/gameutil"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -18,7 +18,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
-	// "diamond"
 )
 
 const (
@@ -70,16 +69,6 @@ type bullet struct {
 	clr        color.RGBA
 }
 
-type zombie struct {
-	img        *ebiten.Image
-	x, y, r, s float64
-	speed      float64
-	angle      float64
-	health     int
-
-	boss bool
-}
-
 type Game struct {
 	bossCooldown        int
 	state               int
@@ -89,7 +78,7 @@ type Game struct {
 	cards               []card
 	diamonds            []diamond.Diamond
 	bullets             []bullet
-	zombies             []zombie
+	zombies             []zombie.Zombie
 	trees               []tree
 	miniatureCard       miniatureCard
 	upgrades            map[string]int
@@ -158,7 +147,7 @@ func (g *Game) reset() {
 	g.bullets = []bullet{}
 	g.diamonds = []diamond.Diamond{}
 	g.cards = []card{}
-	g.zombies = []zombie{}
+	g.zombies = []zombie.Zombie{}
 	g.upgrades = map[string]int{
 		"pierce":  0,
 		"vampire": 0,
@@ -187,9 +176,9 @@ func (g *Game) Update() error {
 			playerWorldX := g.player.x - g.mapX
 			playerWorldY := g.player.y - g.mapY
 
-			g.zombies = ZombiesMovement(g.zombies, playerWorldX, playerWorldY)
+			g.zombies = zombie.Movement(g.zombies, playerWorldX, playerWorldY)
 
-			g.zombies = ZombieSpawn(g.zombies, &g.addZombieCooldown)
+			g.zombies = zombie.Spawn(g.zombies, &g.addZombieCooldown, zombieImg, screenWidth, screenHeight)
 
 			g.bullets = CreateBullet(g.player.x, g.player.y, playerWorldX, playerWorldY, &g.player.angle, g.player.shootRange, g.player.cadence, g.zombies, g.bullets, &g.player.shootCooldown)
 			MoveBullets(g.bullets, g.player.x, g.player.y)
@@ -197,7 +186,7 @@ func (g *Game) Update() error {
 			bulletHitZombie, zi, bi := BulletHitZombie(g.zombies, g.bullets, g.mapX, g.mapY)
 
 			if bulletHitZombie {
-				diamond.Spawn(&g.diamonds, g.zombies[zi].x, g.zombies[zi].y, 56, diamondImg) // <-- MODIFIÉ : Rayon du diamant fixe à 56
+				diamond.Spawn(&g.diamonds, g.zombies[zi].X, g.zombies[zi].Y, 56, diamondImg)
 
 				g.zombies, g.bullets = BulletHitZombieReaction(zi, bi, g.zombies, g.bullets, g.upgrades, &g.player.lifes, &g.bossCooldown)
 			}
@@ -216,7 +205,7 @@ func (g *Game) Update() error {
 
 			CreateCards(&g.cards, &g.player.diamond, &g.player.diamondQuota)
 
-			ZombieAttack(playerWorldX, playerWorldY, g.player.r, &g.zombies, &g.player.lifes)
+			zombie.Attack(playerWorldX, playerWorldY, g.player.r, &g.zombies, &g.player.lifes)
 
 			antiCheatLimit(&g.player.cadence, &g.player.speed)
 
@@ -224,44 +213,14 @@ func (g *Game) Update() error {
 
 			if g.bossCooldown <= 0 {
 
-				var remainingZombies []zombie
-				for _, z := range g.zombies {
-					if z.boss {
-						remainingZombies = append(remainingZombies, z)
-					}
-				}
-
-				g.zombies = remainingZombies
 				g.trees = []tree{}
 
-				if g.bossCooldown == 0 {
-
-					g.zombies = append(g.zombies, zombie{
-						x:      playerWorldX + 1000,
-						y:      playerWorldY,
-						r:      200,
-						img:    bossImg,
-						speed:  g.player.speed - 1,
-						angle:  0,
-						health: 10,
-						s:      2,
-						boss:   true,
-					})
-
-					g.mapX = 0
-					g.mapY = 0
-				}
-
-				g.player.angle = math.Atan2(-(g.zombies[0].y - playerWorldY), -(g.zombies[0].x - playerWorldX))
-
-				g.bossCooldown--
-
+				zombie.UpdateBossPhase(&g.zombies, &g.bossCooldown, &g.player.angle, g.player.x, g.player.y, g.player.speed, bossImg)
 			}
-		} else {
+
 			if len(g.cards) > 3 {
 				panic("have more than 3 cards")
 			}
-
 			g.upgrades = DetectClickOnCard(&g.cards, g.upgrades, &g.player.cadence, &g.player.speed, &g.player.shootRange, &g.clicPrecedent, &g.player.pickupRadius)
 		}
 	} else {
@@ -342,27 +301,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	// zombies
 	for _, z := range g.zombies {
+		z.Draw(screen, g.mapX, g.mapY)
 
-		op := &ebiten.DrawImageOptions{}
-
-		w := z.img.Bounds().Dx()
-		h := z.img.Bounds().Dy()
-
-		op.GeoM.Translate(-float64(w)/2, -float64(h)/2)
-
-		op.GeoM.Rotate(z.angle + math.Pi)
-
-		op.GeoM.Scale(z.s, z.s)
-
-		op.GeoM.Translate(z.x+g.mapX, z.y+g.mapY)
-
-		screen.DrawImage(z.img, op)
-
-		if z.boss {
-			// jauge de vie du boss
-			vector.StrokeRect(screen, (float32(z.x)-100)+float32(g.mapX), (float32(z.y)-300)+float32(g.mapY), 260, 60, 10, color.RGBA{255, 255, 255, 255}, true)
-
-			vector.DrawFilledRect(screen, ((float32(z.x)-100)+5)+float32(g.mapX), ((float32(z.y)-300)+5)+float32(g.mapY), float32(z.health)*(250/10), 54, color.RGBA{0, 255, 0, 255}, true)
+		if z.Boss {
+			print("")
 		}
 	}
 
@@ -450,7 +392,7 @@ func main() {
 
 	g := &Game{
 		state:        StatePlaying,
-		bossCooldown: 1800,
+		bossCooldown: 120,
 		upgrades: map[string]int{
 			"pierce":  0,
 			"vampire": 0,

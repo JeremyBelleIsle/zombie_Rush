@@ -5,17 +5,18 @@ import (
 	"math"
 	"math/rand/v2"
 	"slices"
+	"zombie_rush/zombie"
 
 	"github.com/JeremyBelleIsle/gameutil"
 )
 
-func BulletHitZombie(zombies []zombie, bullets []bullet, WX, WY float64) (bool, int, int) {
+func BulletHitZombie(zombies []zombie.Zombie, bullets []bullet, WX, WY float64) (bool, int, int) {
 
 	for i, z := range zombies {
 
 		for j, b := range bullets {
 
-			if gameutil.CircleRectCollision(z.x, z.y, z.r, b.x-WX, b.y-WY, b.w, b.h) {
+			if gameutil.CircleRectCollision(z.X, z.Y, z.R, b.x-WX, b.y-WY, b.w, b.h) {
 				return true, i, j
 			}
 
@@ -26,7 +27,7 @@ func BulletHitZombie(zombies []zombie, bullets []bullet, WX, WY float64) (bool, 
 
 }
 
-func CreateBullet(px, py, pWorldX, pWorldY float64, playerAngle *float64, shootRange float64, cadence float64, zombies []zombie, bullets []bullet, cooldown *int) []bullet {
+func CreateBullet(px, py, pWorldX, pWorldY float64, playerAngle *float64, shootRange float64, cadence float64, zombies []zombie.Zombie, bullets []bullet, cooldown *int) []bullet {
 	// 1. Gestion du délai de tir
 	if *cooldown > 0 {
 		*cooldown--
@@ -34,15 +35,15 @@ func CreateBullet(px, py, pWorldX, pWorldY float64, playerAngle *float64, shootR
 	}
 
 	// 2. Recherche du zombie le plus proche
-	var closestZombie *zombie
+	var closestZombie *zombie.Zombie
 	minDist := float64(shootRange * shootRange) // Distance max au carré (ex: 200 pixels)
 
 	for i := range zombies {
 		z := &zombies[i]
 
 		// On compare avec la position du joueur dans le monde
-		dx := z.x - pWorldX
-		dy := z.y - pWorldY
+		dx := z.X - pWorldX
+		dy := z.Y - pWorldY
 		distSq := dx*dx + dy*dy
 
 		if distSq < minDist {
@@ -56,8 +57,8 @@ func CreateBullet(px, py, pWorldX, pWorldY float64, playerAngle *float64, shootR
 	if closestZombie != nil {
 		*cooldown = int(cadence) // On réinitialise le délai
 
-		dx := closestZombie.x - pWorldX
-		dy := closestZombie.y - pWorldY
+		dx := closestZombie.X - pWorldX
+		dy := closestZombie.Y - pWorldY
 		dist := math.Sqrt(dx*dx + dy*dy)
 
 		bulletSpeed := 15.0
@@ -94,13 +95,13 @@ func MoveBullets(bullets []bullet, px, py float64) []bullet {
 	return bullets
 }
 
-func BulletHitZombieReaction(zombieIndex int, bulletIndex int, zombies []zombie, bullets []bullet, upgrades map[string]int, lifes *int, bossCooldown *int) ([]zombie, []bullet) {
+func BulletHitZombieReaction(zombieIndex int, bulletIndex int, zombies []zombie.Zombie, bullets []bullet, upgrades map[string]int, lifes *int, bossCooldown *int) ([]zombie.Zombie, []bullet) {
 
-	zombies[zombieIndex].health--
+	zombies[zombieIndex].Health--
 
-	if zombies[zombieIndex].health <= 0 {
+	if zombies[zombieIndex].Health <= 0 {
 
-		if zombies[zombieIndex].boss {
+		if zombies[zombieIndex].Boss {
 			*bossCooldown = 1800
 		}
 
