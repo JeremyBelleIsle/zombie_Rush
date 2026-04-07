@@ -12,7 +12,7 @@ type Player struct {
 	img           *ebiten.Image
 	Angle         float64
 	X, Y, R       float64
-	PickupRadius  float64 // <-- NOUVEAU : Le rayon de ramassage
+	PickupRadius  float64
 	Speed         float64
 	ShootRange    float64
 	ShootCooldown int

@@ -118,7 +118,7 @@ func HitZombieReaction(zombieIndex int, bulletIndex int, zombies []zombie.Zombie
 	}
 
 	if upgrades["vampire"] > 0 && rand.IntN(100) < upgrades["vampire"] {
-		*lifes++
+		*lifes += 5
 	}
 
 	if upgrades["pierce"] == 0 || rand.IntN(100) > upgrades["pierce"] {

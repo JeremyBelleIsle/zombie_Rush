@@ -10,6 +10,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"zombie_rush/bullet"
+	"zombie_rush/card"
 	"zombie_rush/diamond"
 	"zombie_rush/player"
 	"zombie_rush/zombie"
@@ -31,13 +32,6 @@ const (
 	StateGameOver = 1
 )
 
-type card struct {
-	x, y, w, h  float64
-	description string
-	name        string
-	clr         color.RGBA
-}
-
 type miniatureCard struct {
 	x, y, s float64
 	img     *ebiten.Image
@@ -54,7 +48,7 @@ type Game struct {
 	addZombieCooldown   float64
 	zombieSpawnCooldown float64
 	player              player.Player
-	cards               []card
+	cards               []card.Card
 	diamonds            []diamond.Diamond
 	bullets             []bullet.Bullet
 	zombies             []zombie.Zombie
@@ -126,7 +120,7 @@ func (g *Game) reset() {
 	g.bossCooldown = 1800
 	g.bullets = []bullet.Bullet{}
 	g.diamonds = []diamond.Diamond{}
-	g.cards = []card{}
+	g.cards = []card.Card{}
 	g.zombies = []zombie.Zombie{}
 	g.upgrades = map[string]int{
 		"pierce":  0,
@@ -183,7 +177,7 @@ func (g *Game) Update() error {
 
 			g.diamonds = diamond.DragToPlayer(g.diamonds, playerWorldX, playerWorldY, &g.player.Diamond)
 
-			CreateCards(&g.cards, &g.player.Diamond, &g.player.DiamondQuota)
+			card.Create(&g.cards, &g.player.Diamond, &g.player.DiamondQuota, screenHeight)
 
 			zombie.Attack(playerWorldX, playerWorldY, g.player.R, &g.zombies, &g.player.Lifes)
 
@@ -195,13 +189,8 @@ func (g *Game) Update() error {
 
 				g.trees = []tree{}
 
-				zombie.UpdateBossPhase(&g.zombies, &g.bossCooldown, &g.player.Angle, g.player.X, g.player.Y, g.player.Speed, bossImg)
+				zombie.UpdateBossPhase(&g.zombies, &g.bossCooldown, &g.player.Angle, g.player.X, g.player.Y, g.player.Speed, bossImg, &g.mapX, &g.mapY)
 			}
-
-			if len(g.cards) > 3 {
-				panic("have more than 3 cards")
-			}
-			g.upgrades = DetectClickOnCard(&g.cards, g.upgrades, &g.player.Cadence, &g.player.Speed, &g.player.ShootRange, &g.clicPrecedent, &g.player.PickupRadius)
 		}
 	} else {
 		touches := inpututil.AppendJustPressedKeys(nil)
@@ -210,6 +199,8 @@ func (g *Game) Update() error {
 			g.reset()
 		}
 	}
+
+	g.upgrades = card.DetectClick(&g.cards, g.upgrades, &g.player.Cadence, &g.player.Speed, &g.player.ShootRange, &g.clicPrecedent, &g.player.PickupRadius)
 
 	return nil
 }
@@ -269,11 +260,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			vector.DrawFilledRect(screen, 0, 0, screenWidth, screenHeight, color.RGBA{50, 50, 50, 240}, false)
 
 			for _, c := range g.cards {
-				vector.StrokeRect(screen, float32(c.x), float32(c.y), float32(c.w), float32(c.h), 30, c.clr, true)
-
-				gameutil.DrawText(c.name, 100, int(c.x+c.w), c.x+30, c.y+100, 0, screen, color.RGBA{255, 255, 255, 255}, mplusSource)
-
-				gameutil.DrawText(c.description, 40, int(c.x+c.w), c.x+30, c.y+400, 0, screen, color.RGBA{255, 255, 255, 255}, mplusSource)
+				c.Draw(screen, mplusSource)
 			}
 		}
 
@@ -339,7 +326,7 @@ func main() {
 
 	g := &Game{
 		state:        StatePlaying,
-		bossCooldown: 120,
+		bossCooldown: 1800,
 		upgrades: map[string]int{
 			"pierce":  0,
 			"vampire": 0,

@@ -1,4 +1,4 @@
-package main
+package card
 
 import (
 	"fmt"
@@ -7,9 +7,18 @@ import (
 
 	"github.com/JeremyBelleIsle/gameutil"
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/text/v2"
+	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
-func CreateCards(cards *[]card, diamondCount *int, diamondQuota *int) {
+type Card struct {
+	x, y, w, h  float64
+	description string
+	name        string
+	clr         color.RGBA
+}
+
+func Create(cards *[]Card, diamondCount *int, diamondQuota *int, screenHeight float64) {
 	// modifier 1 à genre 7
 	if *diamondCount >= *diamondQuota {
 		*diamondQuota += 2
@@ -45,7 +54,7 @@ func CreateCards(cards *[]card, diamondCount *int, diamondQuota *int) {
 			}
 
 			def := cards2[nameInt]
-			*cards = append(*cards, card{
+			*cards = append(*cards, Card{
 				x:           float64(i*775 + 160),
 				y:           30,
 				w:           775,
@@ -58,7 +67,7 @@ func CreateCards(cards *[]card, diamondCount *int, diamondQuota *int) {
 	}
 }
 
-func DetectClickOnCard(cards *[]card, upgrades map[string]int, cadence *float64, playerSpeed *float64, shootRange *float64, clicPrecedent *bool, pickupRadius *float64) map[string]int {
+func DetectClick(cards *[]Card, upgrades map[string]int, cadence *float64, playerSpeed *float64, shootRange *float64, clicPrecedent *bool, pickupRadius *float64) map[string]int {
 
 	xC, yC := ebiten.CursorPosition()
 	x, y := float64(xC), float64(yC)
@@ -69,7 +78,7 @@ func DetectClickOnCard(cards *[]card, upgrades map[string]int, cadence *float64,
 		if clicActuel && !*clicPrecedent {
 			if gameutil.Within(x, y, c.x, c.y, c.w, c.h) {
 				// debug
-				fmt.Println(lineSeparation)
+				fmt.Println("=====================")
 				fmt.Print("upgrade: ")
 				fmt.Println(c.name)
 
@@ -88,7 +97,7 @@ func DetectClickOnCard(cards *[]card, upgrades map[string]int, cadence *float64,
 					*shootRange += 200
 				}
 
-				*cards = []card{}
+				*cards = []Card{}
 			}
 		}
 	}
@@ -96,4 +105,13 @@ func DetectClickOnCard(cards *[]card, upgrades map[string]int, cadence *float64,
 	*clicPrecedent = clicActuel
 
 	return upgrades
+}
+
+func (c Card) Draw(screen *ebiten.Image, mplusSource *text.GoTextFaceSource) {
+
+	vector.StrokeRect(screen, float32(c.x), float32(c.y), float32(c.w), float32(c.h), 30, c.clr, true)
+
+	gameutil.DrawText(c.name, 100, int(c.x+c.w), c.x+30, c.y+100, 0, screen, color.RGBA{255, 255, 255, 255}, mplusSource)
+
+	gameutil.DrawText(c.description, 40, int(c.x+c.w), c.x+30, c.y+400, 0, screen, color.RGBA{255, 255, 255, 255}, mplusSource)
 }

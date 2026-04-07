@@ -83,6 +83,7 @@ func UpdateBossPhase(
 	playerX, playerY float64,
 	playerSpeed float64,
 	bossImg *ebiten.Image,
+	mapX, mapY *float64,
 ) {
 	// 1. Filtrage des zombies : on modifie la slice pointée
 	var remaining []Zombie
@@ -105,6 +106,9 @@ func UpdateBossPhase(
 			Boss:   true,
 			Health: 10,
 		})
+
+		*mapX = 0
+		*mapY = 0
 	}
 
 	// 4. Mise à jour de l'angle du joueur
