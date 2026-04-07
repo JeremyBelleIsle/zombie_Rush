@@ -165,7 +165,6 @@ func (g *Game) Update() error {
 				g.zombies, g.bullets = bullet.HitZombieReaction(zi, bi, g.zombies, g.bullets, g.upgrades, &g.player.Lifes, &g.bossCooldown)
 			}
 
-			// <-- MODIFIÉ : Utilise g.player.pickupRadius au lieu de g.player.r pour ramasser
 			diamondPickup, di := diamond.PickupRadius(g.player.X, g.player.Y, g.player.PickupRadius, g.mapX, g.mapY, g.diamonds)
 
 			if diamondPickup {
@@ -177,7 +176,7 @@ func (g *Game) Update() error {
 
 			g.diamonds = diamond.DragToPlayer(g.diamonds, playerWorldX, playerWorldY, &g.player.Diamond)
 
-			card.Create(&g.cards, &g.player.Diamond, &g.player.DiamondQuota, screenHeight)
+			card.Create(&g.cards, &g.player.Diamond, &g.player.DiamondQuota, screenHeight, g.bossCooldown)
 
 			zombie.Attack(playerWorldX, playerWorldY, g.player.R, &g.zombies, &g.player.Lifes)
 
@@ -257,6 +256,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		screen.DrawImage(g.miniatureCard.img, op)
 
 		if len(g.cards) > 0 {
+
 			vector.DrawFilledRect(screen, 0, 0, screenWidth, screenHeight, color.RGBA{50, 50, 50, 240}, false)
 
 			for _, c := range g.cards {

@@ -18,7 +18,13 @@ type Card struct {
 	clr         color.RGBA
 }
 
-func Create(cards *[]Card, diamondCount *int, diamondQuota *int, screenHeight float64) {
+func Create(cards *[]Card, diamondCount *int, diamondQuota *int, screenHeight float64, bossCooldown int) {
+
+	// s'en aller immédiatement si c'est le boss
+	if bossCooldown <= 0 {
+		return
+	}
+
 	// modifier 1 à genre 7
 	if *diamondCount >= *diamondQuota {
 		*diamondQuota += 2
