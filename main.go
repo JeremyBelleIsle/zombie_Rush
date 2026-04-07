@@ -11,6 +11,7 @@ import (
 	"os"
 	"zombie_rush/bullet"
 	"zombie_rush/diamond"
+	"zombie_rush/player"
 	"zombie_rush/zombie"
 
 	"github.com/JeremyBelleIsle/gameutil"
@@ -29,21 +30,6 @@ const (
 	StatePlaying  = 0
 	StateGameOver = 1
 )
-
-type player struct {
-	img           *ebiten.Image
-	angle         float64
-	x, y, r       float64
-	pickupRadius  float64 // <-- NOUVEAU : Le rayon de ramassage
-	speed         float64
-	shootRange    float64
-	shootCooldown int
-	cadence       float64
-	lifes         int
-	diamond       int
-	diamondQuota  int
-	clr           color.RGBA
-}
 
 type card struct {
 	x, y, w, h  float64
@@ -67,7 +53,7 @@ type Game struct {
 	state               int
 	addZombieCooldown   float64
 	zombieSpawnCooldown float64
-	player              player
+	player              player.Player
 	cards               []card
 	diamonds            []diamond.Diamond
 	bullets             []bullet.Bullet
@@ -129,13 +115,14 @@ func antiCheatLimit(cadence *float64, speed *float64) {
 func (g *Game) reset() {
 	g.state = StatePlaying
 	g.addZombieCooldown = 60
-	g.player.lifes = 100
-	g.player.pickupRadius = 100 // <-- NOUVEAU : Initialisation
-	g.player.diamond = 0
-	g.player.diamondQuota = 7
-	g.player.cadence = 60
-	g.player.shootCooldown = 60
-	g.player.speed = 10
+	g.player.Lifes = 100
+	g.player.PickupRadius = 100 // <-- NOUVEAU : Initialisation
+	g.player.Diamond = 0
+	g.player.DiamondQuota = 7
+	g.player.Cadence = 60
+	g.player.ShootCooldown = 60
+	g.player.Speed = 10
+	g.player.ShootRange = 700
 	g.bossCooldown = 1800
 	g.bullets = []bullet.Bullet{}
 	g.diamonds = []diamond.Diamond{}
@@ -152,40 +139,40 @@ func (g *Game) reset() {
 func (g *Game) Update() error {
 	if g.state == StatePlaying {
 
-		if g.player.lifes <= 0 {
+		if g.player.Lifes <= 0 {
 			g.state = StateGameOver
 		}
 
-		if g.player.lifes > 100 {
-			g.player.lifes = 100
+		if g.player.Lifes > 100 {
+			g.player.Lifes = 100
 		}
 
 		if len(g.cards) == 0 {
 			g.bossCooldown--
 
-			MovePlayer(&g.mapX, &g.mapY, g.player.speed, g.bossCooldown, g.player.x, g.player.y, g.player.r)
+			player.Move(g.player.X, g.player.Y, g.player.R, &g.mapX, &g.mapY, g.player.Speed, g.bossCooldown, fenceImg, screenWidth, screenHeight)
 
 			// Position du joueur dans le "monde" (en tenant compte de la caméra)
-			playerWorldX := g.player.x - g.mapX
-			playerWorldY := g.player.y - g.mapY
+			playerWorldX := g.player.X - g.mapX
+			playerWorldY := g.player.Y - g.mapY
 
 			g.zombies = zombie.Movement(g.zombies, playerWorldX, playerWorldY)
 
 			g.zombies = zombie.Spawn(g.zombies, &g.addZombieCooldown, zombieImg, screenWidth, screenHeight)
 
-			g.bullets = bullet.Create(g.player.x, g.player.y, playerWorldX, playerWorldY, &g.player.angle, g.player.shootRange, g.player.cadence, g.zombies, g.bullets, &g.player.shootCooldown, bulletImg)
-			bullet.Move(g.bullets, g.player.x, g.player.y)
+			g.bullets = bullet.Create(g.player.X, g.player.Y, playerWorldX, playerWorldY, &g.player.Angle, g.player.ShootRange, g.player.Cadence, g.zombies, g.bullets, &g.player.ShootCooldown, bulletImg)
+			bullet.Move(g.bullets, g.player.X, g.player.Y)
 
 			bulletHitZombie, zi, bi := bullet.HitZombie(g.zombies, g.bullets, g.mapX, g.mapY)
 
 			if bulletHitZombie {
 				diamond.Spawn(&g.diamonds, g.zombies[zi].X, g.zombies[zi].Y, 56, diamondImg)
 
-				g.zombies, g.bullets = bullet.HitZombieReaction(zi, bi, g.zombies, g.bullets, g.upgrades, &g.player.lifes, &g.bossCooldown)
+				g.zombies, g.bullets = bullet.HitZombieReaction(zi, bi, g.zombies, g.bullets, g.upgrades, &g.player.Lifes, &g.bossCooldown)
 			}
 
 			// <-- MODIFIÉ : Utilise g.player.pickupRadius au lieu de g.player.r pour ramasser
-			diamondPickup, di := diamond.PickupRadius(g.player.x, g.player.y, g.player.pickupRadius, g.mapX, g.mapY, g.diamonds)
+			diamondPickup, di := diamond.PickupRadius(g.player.X, g.player.Y, g.player.PickupRadius, g.mapX, g.mapY, g.diamonds)
 
 			if diamondPickup {
 				fmt.Println(lineSeparation)
@@ -194,13 +181,13 @@ func (g *Game) Update() error {
 				g.diamonds[di].DetectedInPickupRadius = true
 			}
 
-			g.diamonds = diamond.DragToPlayer(g.diamonds, playerWorldX, playerWorldY, &g.player.diamond)
+			g.diamonds = diamond.DragToPlayer(g.diamonds, playerWorldX, playerWorldY, &g.player.Diamond)
 
-			CreateCards(&g.cards, &g.player.diamond, &g.player.diamondQuota)
+			CreateCards(&g.cards, &g.player.Diamond, &g.player.DiamondQuota)
 
-			zombie.Attack(playerWorldX, playerWorldY, g.player.r, &g.zombies, &g.player.lifes)
+			zombie.Attack(playerWorldX, playerWorldY, g.player.R, &g.zombies, &g.player.Lifes)
 
-			antiCheatLimit(&g.player.cadence, &g.player.speed)
+			antiCheatLimit(&g.player.Cadence, &g.player.Speed)
 
 			g.zombieSpawnCooldown--
 
@@ -208,13 +195,13 @@ func (g *Game) Update() error {
 
 				g.trees = []tree{}
 
-				zombie.UpdateBossPhase(&g.zombies, &g.bossCooldown, &g.player.angle, g.player.x, g.player.y, g.player.speed, bossImg)
+				zombie.UpdateBossPhase(&g.zombies, &g.bossCooldown, &g.player.Angle, g.player.X, g.player.Y, g.player.Speed, bossImg)
 			}
 
 			if len(g.cards) > 3 {
 				panic("have more than 3 cards")
 			}
-			g.upgrades = DetectClickOnCard(&g.cards, g.upgrades, &g.player.cadence, &g.player.speed, &g.player.shootRange, &g.clicPrecedent, &g.player.pickupRadius)
+			g.upgrades = DetectClickOnCard(&g.cards, g.upgrades, &g.player.Cadence, &g.player.Speed, &g.player.ShootRange, &g.clicPrecedent, &g.player.PickupRadius)
 		}
 	} else {
 		touches := inpututil.AppendJustPressedKeys(nil)
@@ -251,7 +238,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	} else {
 
 		// debug
-		vector.StrokeCircle(screen, float32(g.player.x), float32(g.player.y), float32(g.player.pickupRadius), 2, color.RGBA{0, 0, 120, 120}, true)
+		vector.StrokeCircle(screen, float32(g.player.X), float32(g.player.Y), float32(g.player.PickupRadius), 2, color.RGBA{0, 0, 120, 120}, true)
 
 		for _, d := range g.diamonds {
 			d.Draw(screen, g.mapX, g.mapY)
@@ -269,7 +256,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 		vector.StrokeRect(screen, 700, 50, 500, 60, 10, color.RGBA{255, 255, 255, 255}, true)
 
-		vector.DrawFilledRect(screen, 700, 50, float32(g.player.diamond*(500/g.player.diamondQuota)), 54, color.RGBA{38, 115, 211, 255}, true)
+		vector.DrawFilledRect(screen, 700, 50, float32(g.player.Diamond*(500/g.player.DiamondQuota)), 54, color.RGBA{38, 115, 211, 255}, true)
 		op := &ebiten.DrawImageOptions{}
 
 		op.GeoM.Scale(g.miniatureCard.s, g.miniatureCard.s)
@@ -302,20 +289,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 
 	// player
-	op := &ebiten.DrawImageOptions{}
-
-	w := g.player.img.Bounds().Dx()
-	h := g.player.img.Bounds().Dy()
-
-	op.GeoM.Translate(-float64(w)/2, -float64(h)/2)
-
-	op.GeoM.Rotate(g.player.angle)
-
-	op.GeoM.Scale(.5, .5)
-
-	op.GeoM.Translate(g.player.x, g.player.y)
-
-	screen.DrawImage(g.player.img, op)
+	g.player.Draw(screen)
 
 	for _, b := range g.bullets {
 		b.Draw(screen)
@@ -324,7 +298,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// jauge de vie du player
 	vector.StrokeRect(screen, 10, 10, 510, 60, 10, color.RGBA{255, 255, 255, 255}, true)
 
-	vector.DrawFilledRect(screen, 15, 15, float32(g.player.lifes)*(500/100), 54, color.RGBA{0, 255, 0, 255}, true)
+	vector.DrawFilledRect(screen, 15, 15, float32(g.player.Lifes)*(500/100), 54, color.RGBA{0, 255, 0, 255}, true)
 
 	if g.state == StateGameOver {
 		vector.DrawFilledRect(screen, 0, 0, screenWidth, screenHeight, color.RGBA{50, 50, 50, 240}, true)
@@ -377,22 +351,9 @@ func main() {
 			s:   .3,
 			img: cardImg,
 		},
-
-		player: player{
-			img:           playerImg,
-			x:             screenWidth / 2,
-			y:             screenHeight / 2,
-			r:             70,
-			pickupRadius:  80, // <-- NOUVEAU : Valeur de départ
-			cadence:       60,
-			shootRange:    700,
-			shootCooldown: 60,
-			diamondQuota:  7,
-			speed:         10,
-			lifes:         100,
-			clr:           color.RGBA{255, 255, 0, 255},
-		},
 	}
+
+	g.player.Initialization(playerImg, screenWidth, screenHeight)
 
 	for i := 0; i < 8; i++ {
 		g.trees = append(g.trees, tree{
