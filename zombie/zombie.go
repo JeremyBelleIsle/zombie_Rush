@@ -114,7 +114,7 @@ func UpdateBossPhase(
 	// 4. Mise à jour de l'angle du joueur
 	if len(*zombies) > 0 {
 		target := (*zombies)[0]
-		*playerAngle = math.Atan2((target.Y - playerY), (target.X - playerX))
+		*playerAngle = math.Atan2(-(target.Y - (playerY - *mapY)), -(target.X - (playerX - *mapX)))
 	}
 
 	// 5. Décrémentation du cooldown
