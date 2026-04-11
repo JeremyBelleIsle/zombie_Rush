@@ -46,12 +46,12 @@ func Movement(zombies []Zombie, px, py float64, ice ice.Ice) []Zombie {
 	return zombies
 }
 
-func Spawn(zombies []Zombie, addZombieCooldown *float64, zombieImg *ebiten.Image, screenWidht, screenHeight int) []Zombie {
+func Spawn(zombies []Zombie, addZombieCooldown *float64, setSpawnZombieCadence float64, zombieImg *ebiten.Image, screenWidht, screenHeight int) []Zombie {
 
 	if *addZombieCooldown > 0 {
 		*addZombieCooldown--
 	} else {
-		*addZombieCooldown = 60
+		*addZombieCooldown = setSpawnZombieCadence
 
 		zombies = append(zombies, Zombie{
 			X:      float64(rand.IntN(screenWidht+1000) + -500),

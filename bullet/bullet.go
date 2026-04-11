@@ -117,7 +117,7 @@ func HitZombieReaction(zombieIndex int, bulletIndex int, zombies []zombie.Zombie
 		bullets = slices.Delete(bullets, bulletIndex, bulletIndex+1)
 	}
 
-	if upgrades["fridge"] == 0 || rand.IntN(100) > upgrades["fridge"] {
+	if upgrades["fridge"] > 0 && rand.IntN(100) < upgrades["fridge"] {
 		ice.Spawn(zombies[zombieIndex].X, zombies[zombieIndex].Y, iceCircleImg, &iceV)
 	}
 

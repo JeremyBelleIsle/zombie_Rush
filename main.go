@@ -44,21 +44,21 @@ type tree struct {
 }
 
 type Game struct {
-	bossCooldown        int
-	state               int
-	addZombieCooldown   float64
-	zombieSpawnCooldown float64
-	player              player.Player
-	cards               []card.Card
-	diamonds            []diamond.Diamond
-	bullets             []bullet.Bullet
-	zombies             []zombie.Zombie
-	trees               []tree
-	ice                 ice.Ice
-	miniatureCard       miniatureCard
-	upgrades            map[string]int
-	clicPrecedent       bool
-	mapX, mapY          float64
+	bossCooldown          int
+	state                 int
+	setSpawnZombieCadence float64
+	addZombieCooldown     float64
+	player                player.Player
+	cards                 []card.Card
+	diamonds              []diamond.Diamond
+	bullets               []bullet.Bullet
+	zombies               []zombie.Zombie
+	trees                 []tree
+	ice                   ice.Ice
+	miniatureCard         miniatureCard
+	upgrades              map[string]int
+	clicPrecedent         bool
+	mapX, mapY            float64
 }
 
 var (
@@ -111,7 +111,7 @@ func antiCheatLimit(cadence *float64, speed *float64) {
 
 func (g *Game) reset() {
 	g.state = StatePlaying
-	g.addZombieCooldown = 60
+	g.setSpawnZombieCadence = 60
 	g.player.Lifes = 100
 	g.player.PickupRadius = 100 // <-- NOUVEAU : Initialisation
 	g.player.Diamond = 0
@@ -151,6 +151,7 @@ func (g *Game) Update() error {
 		}
 
 		if len(g.cards) == 0 {
+			g.setSpawnZombieCadence -= .0006
 			g.bossCooldown--
 
 			player.Move(g.player.X, g.player.Y, g.player.R, &g.mapX, &g.mapY, g.player.Speed, g.bossCooldown, fenceImg, screenWidth, screenHeight)
@@ -161,7 +162,7 @@ func (g *Game) Update() error {
 
 			g.zombies = zombie.Movement(g.zombies, playerWorldX, playerWorldY, g.ice)
 
-			g.zombies = zombie.Spawn(g.zombies, &g.addZombieCooldown, zombieImg, screenWidth, screenHeight)
+			g.zombies = zombie.Spawn(g.zombies, &g.addZombieCooldown, g.setSpawnZombieCadence, zombieImg, screenWidth, screenHeight)
 
 			g.bullets = bullet.Create(g.player.X, g.player.Y, playerWorldX, playerWorldY, &g.player.Angle, g.player.ShootRange, g.player.Cadence, g.zombies, g.bullets, &g.player.ShootCooldown, bulletImg)
 			bullet.Move(g.bullets, g.player.X, g.player.Y)
@@ -190,8 +191,6 @@ func (g *Game) Update() error {
 			zombie.Attack(playerWorldX, playerWorldY, g.player.R, &g.zombies, &g.player.Lifes)
 
 			antiCheatLimit(&g.player.Cadence, &g.player.Speed)
-
-			g.zombieSpawnCooldown--
 
 			if g.bossCooldown <= 0 {
 
@@ -337,8 +336,9 @@ func main() {
 	mplusSource = s
 
 	g := &Game{
-		state:        StatePlaying,
-		bossCooldown: 1800,
+		state:                 StatePlaying,
+		bossCooldown:          1800,
+		setSpawnZombieCadence: 60,
 		upgrades: map[string]int{
 			"pierce":  0,
 			"vampire": 0,
