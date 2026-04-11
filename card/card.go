@@ -41,6 +41,7 @@ func Create(cards *[]Card, diamondCount *int, diamondQuota *int, screenHeight fl
 			{"treasure hunter", "attracts diamonds from a greater distance"},
 			{"player speed", "you go faster"},
 			{"sniper", "you can shoot from further away"},
+			{"fridge", "It freezes enemies around the bullet if it hits its target."},
 		}
 
 		usedIndices := map[int]bool{}
@@ -96,11 +97,13 @@ func DetectClick(cards *[]Card, upgrades map[string]int, cadence *float64, playe
 				case "vampire":
 					upgrades["vampire"] += 3
 				case "treasure hunter":
-					*pickupRadius += 75 // <-- MODIFIÉ : Augmente le rayon de ramassage du joueur
+					*pickupRadius += 75
 				case "player speed":
 					*playerSpeed += 3
 				case "sniper":
 					*shootRange += 200
+				case "fridge":
+					upgrades["fridge"] += 8
 				}
 
 				*cards = []Card{}

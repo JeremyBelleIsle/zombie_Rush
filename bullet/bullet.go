@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"slices"
+	"zombie_rush/ice"
 	"zombie_rush/zombie"
 
 	"github.com/JeremyBelleIsle/gameutil"
@@ -104,9 +105,21 @@ func Move(bullets []Bullet, px, py float64) []Bullet {
 	return bullets
 }
 
-func HitZombieReaction(zombieIndex int, bulletIndex int, zombies []zombie.Zombie, bullets []Bullet, upgrades map[string]int, lifes *int, bossCooldown *int) ([]zombie.Zombie, []Bullet) {
+func HitZombieReaction(zombieIndex int, bulletIndex int, zombies []zombie.Zombie, bullets []Bullet, upgrades map[string]int, lifes *int, bossCooldown *int, iceCircleImg *ebiten.Image, iceV ice.Ice) ([]zombie.Zombie, []Bullet, ice.Ice) {
 
 	zombies[zombieIndex].Health--
+
+	if upgrades["vampire"] > 0 && rand.IntN(100) < upgrades["vampire"] {
+		*lifes += 5
+	}
+
+	if upgrades["pierce"] == 0 || rand.IntN(100) > upgrades["pierce"] {
+		bullets = slices.Delete(bullets, bulletIndex, bulletIndex+1)
+	}
+
+	if upgrades["fridge"] == 0 || rand.IntN(100) > upgrades["fridge"] {
+		ice.Spawn(zombies[zombieIndex].X, zombies[zombieIndex].Y, iceCircleImg, &iceV)
+	}
 
 	if zombies[zombieIndex].Health <= 0 {
 
@@ -117,15 +130,7 @@ func HitZombieReaction(zombieIndex int, bulletIndex int, zombies []zombie.Zombie
 		zombies = slices.Delete(zombies, zombieIndex, zombieIndex+1)
 	}
 
-	if upgrades["vampire"] > 0 && rand.IntN(100) < upgrades["vampire"] {
-		*lifes += 5
-	}
-
-	if upgrades["pierce"] == 0 || rand.IntN(100) > upgrades["pierce"] {
-		bullets = slices.Delete(bullets, bulletIndex, bulletIndex+1)
-	}
-
-	return zombies, bullets
+	return zombies, bullets, iceV
 }
 
 func (b Bullet) Draw(screen *ebiten.Image) {

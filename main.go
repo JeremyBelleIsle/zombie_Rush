@@ -12,6 +12,7 @@ import (
 	"zombie_rush/bullet"
 	"zombie_rush/card"
 	"zombie_rush/diamond"
+	"zombie_rush/ice"
 	"zombie_rush/player"
 	"zombie_rush/zombie"
 
@@ -53,6 +54,7 @@ type Game struct {
 	bullets             []bullet.Bullet
 	zombies             []zombie.Zombie
 	trees               []tree
+	ice                 ice.Ice
 	miniatureCard       miniatureCard
 	upgrades            map[string]int
 	clicPrecedent       bool
@@ -60,14 +62,15 @@ type Game struct {
 }
 
 var (
-	diamondImg *ebiten.Image
-	treeImg    *ebiten.Image
-	cardImg    *ebiten.Image
-	zombieImg  *ebiten.Image
-	playerImg  *ebiten.Image
-	bulletImg  *ebiten.Image
-	fenceImg   *ebiten.Image
-	bossImg    *ebiten.Image
+	diamondImg   *ebiten.Image
+	treeImg      *ebiten.Image
+	cardImg      *ebiten.Image
+	zombieImg    *ebiten.Image
+	playerImg    *ebiten.Image
+	bulletImg    *ebiten.Image
+	fenceImg     *ebiten.Image
+	bossImg      *ebiten.Image
+	iceCircleImg *ebiten.Image
 )
 
 var mplusSource *text.GoTextFaceSource
@@ -131,6 +134,12 @@ func (g *Game) reset() {
 }
 
 func (g *Game) Update() error {
+	if g.ice.Life > 0 {
+		g.ice.Life--
+	} else {
+		g.ice = ice.Ice{}
+	}
+
 	if g.state == StatePlaying {
 
 		if g.player.Lifes <= 0 {
@@ -150,7 +159,7 @@ func (g *Game) Update() error {
 			playerWorldX := g.player.X - g.mapX
 			playerWorldY := g.player.Y - g.mapY
 
-			g.zombies = zombie.Movement(g.zombies, playerWorldX, playerWorldY)
+			g.zombies = zombie.Movement(g.zombies, playerWorldX, playerWorldY, g.ice)
 
 			g.zombies = zombie.Spawn(g.zombies, &g.addZombieCooldown, zombieImg, screenWidth, screenHeight)
 
@@ -162,7 +171,7 @@ func (g *Game) Update() error {
 			if bulletHitZombie {
 				diamond.Spawn(&g.diamonds, g.zombies[zi].X, g.zombies[zi].Y, 56, diamondImg)
 
-				g.zombies, g.bullets = bullet.HitZombieReaction(zi, bi, g.zombies, g.bullets, g.upgrades, &g.player.Lifes, &g.bossCooldown)
+				g.zombies, g.bullets, g.ice = bullet.HitZombieReaction(zi, bi, g.zombies, g.bullets, g.upgrades, &g.player.Lifes, &g.bossCooldown, iceCircleImg, g.ice)
 			}
 
 			diamondPickup, di := diamond.PickupRadius(g.player.X, g.player.Y, g.player.PickupRadius, g.mapX, g.mapY, g.diamonds)
@@ -294,6 +303,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 		gameutil.DrawText("Press any key to restart a game!", 70, screenWidth-200, 200, screenHeight-300, 0, screen, color.RGBA{160, 160, 160, 255}, mplusSource)
 	}
+
+	g.ice.Draw(screen, g.mapX, g.mapY)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
@@ -312,6 +323,7 @@ func main() {
 	bulletImg = loadImage("bullet.png")
 	fenceImg = loadImage("fence.png")
 	bossImg = loadImage("zombieKing.png")
+	iceCircleImg = loadImage("iceCircle.png")
 
 	s2, _ := text.NewGoTextFaceSource(bytes.NewReader(roboto))
 

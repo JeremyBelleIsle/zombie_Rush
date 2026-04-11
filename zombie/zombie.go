@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"slices"
+	"zombie_rush/ice"
 
 	"github.com/JeremyBelleIsle/gameutil"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -17,13 +18,23 @@ type Zombie struct {
 	speed      float64
 	angle      float64
 	Health     int
+	freeze     int
 
 	Boss bool
 }
 
-func Movement(zombies []Zombie, px, py float64) []Zombie {
+func inTheIce(iceX, iceY, iceR, zombieX, zombieY, zombieR float64) bool {
+	return gameutil.CircleCollision(iceX, iceY, iceR, zombieX, zombieY, zombieR)
+}
+
+func Movement(zombies []Zombie, px, py float64, ice ice.Ice) []Zombie {
+
 	for i := range zombies {
 		z := &zombies[i]
+
+		if inTheIce(ice.X, ice.Y, ice.R, z.X, z.Y, z.R) {
+			continue
+		}
 
 		x, y := gameutil.DirigePointToPoint(float32(z.speed), float32(z.X), float32(z.Y), float32(px), float32(py))
 
