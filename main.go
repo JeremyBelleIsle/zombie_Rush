@@ -18,6 +18,7 @@ import (
 
 	"github.com/JeremyBelleIsle/gameutil"
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/audio"
 	"github.com/hajimehoshi/ebiten/v2/examples/resources/fonts"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -43,8 +44,15 @@ type tree struct {
 	x, y, s float64
 }
 
+type Shake struct {
+	duration  int
+	intensity float64
+}
+
 type Game struct {
 	bossCooldown          int
+	bossCnt               int
+	setBossCntValue       int
 	state                 int
 	setSpawnZombieCadence float64
 	addZombieCooldown     float64
@@ -54,14 +62,23 @@ type Game struct {
 	bullets               []bullet.Bullet
 	zombies               []zombie.Zombie
 	trees                 []tree
+	BooomSnd              *audio.Player
+	BossAlarmSnd          *audio.Player
+	tingSnd               *audio.Player
+	impactSnd             *audio.Player
+	GameOverSnd           *audio.Player
+	principalMusic        *audio.Player
 	ice                   ice.Ice
 	miniatureCard         miniatureCard
 	upgrades              map[string]int
 	clicPrecedent         bool
 	mapX, mapY            float64
+	musicStarted          bool
+	shake                 Shake
 }
 
 var (
+	// images
 	diamondImg   *ebiten.Image
 	treeImg      *ebiten.Image
 	cardImg      *ebiten.Image
@@ -72,6 +89,12 @@ var (
 	bossImg      *ebiten.Image
 	iceCircleImg *ebiten.Image
 )
+
+// sound
+
+var audioContext *audio.Context
+
+// fonts
 
 var mplusSource *text.GoTextFaceSource
 
@@ -113,7 +136,8 @@ func (g *Game) reset() {
 	g.state = StatePlaying
 	g.setSpawnZombieCadence = 60
 	g.player.Lifes = 100
-	g.player.PickupRadius = 100 // <-- NOUVEAU : Initialisation
+	g.player.MaxHealth = 100
+	g.player.PickupRadius = 100
 	g.player.Diamond = 0
 	g.player.DiamondQuota = 7
 	g.player.Cadence = 60
@@ -121,6 +145,7 @@ func (g *Game) reset() {
 	g.player.Speed = 10
 	g.player.ShootRange = 700
 	g.bossCooldown = 1800
+	g.bossCnt = 0
 	g.bullets = []bullet.Bullet{}
 	g.diamonds = []diamond.Diamond{}
 	g.cards = []card.Card{}
@@ -131,23 +156,45 @@ func (g *Game) reset() {
 	}
 	g.mapX = 0
 	g.mapY = 0
+	g.musicStarted = false
+	g.shake = Shake{}
 }
 
 func (g *Game) Update() error {
+	// Play principal music on loop
+	if !g.musicStarted {
+		g.musicStarted = true
+		g.principalMusic.Rewind()
+		g.principalMusic.Play()
+	}
+
+	// Restart music if it finished
+	if !g.principalMusic.IsPlaying() && g.musicStarted {
+		g.principalMusic.Rewind()
+		g.principalMusic.Play()
+	}
+
 	if g.ice.Life > 0 {
 		g.ice.Life--
 	} else {
 		g.ice = ice.Ice{}
 	}
 
+	if g.shake.duration > 0 {
+		g.shake.duration--
+	}
+
 	if g.state == StatePlaying {
 
-		if g.player.Lifes <= 0 {
+		if g.player.Lifes < 0 && g.player.Lifes != -1000 {
 			g.state = StateGameOver
+			g.player.Lifes = -1000
+			g.GameOverSnd.Rewind()
+			g.GameOverSnd.Play()
 		}
 
-		if g.player.Lifes > 100 {
-			g.player.Lifes = 100
+		if g.player.Lifes > g.player.MaxHealth {
+			g.player.Lifes = g.player.MaxHealth
 		}
 
 		if len(g.cards) == 0 {
@@ -162,20 +209,25 @@ func (g *Game) Update() error {
 
 			g.zombies = zombie.Movement(g.zombies, playerWorldX, playerWorldY, g.ice)
 
-			g.zombies = zombie.Spawn(g.zombies, &g.addZombieCooldown, g.setSpawnZombieCadence, zombieImg, screenWidth, screenHeight)
+			g.zombies = zombie.Spawn(g.zombies, &g.addZombieCooldown, g.setSpawnZombieCadence, zombieImg, screenWidth, screenHeight, g.mapX, g.mapY)
 
+			previewSlice := g.bullets
 			g.bullets = bullet.Create(g.player.X, g.player.Y, playerWorldX, playerWorldY, &g.player.Angle, g.player.ShootRange, g.player.Cadence, g.zombies, g.bullets, &g.player.ShootCooldown, bulletImg)
+			if len(previewSlice) != len(g.bullets) {
+				g.BooomSnd.Rewind()
+				g.BooomSnd.Play()
+			}
 			bullet.Move(g.bullets, g.player.X, g.player.Y)
 
 			bulletHitZombie, zi, bi := bullet.HitZombie(g.zombies, g.bullets, g.mapX, g.mapY)
 
 			if bulletHitZombie {
-				diamond.Spawn(&g.diamonds, g.zombies[zi].X, g.zombies[zi].Y, 56, diamondImg)
+				diamond.Spawn(&g.diamonds, g.zombies[zi].X, g.zombies[zi].Y, 56, diamondImg, g.bossCooldown)
 
 				g.zombies, g.bullets, g.ice = bullet.HitZombieReaction(zi, bi, g.zombies, g.bullets, g.upgrades, &g.player.Lifes, &g.bossCooldown, iceCircleImg, g.ice)
 			}
 
-			diamondPickup, di := diamond.PickupRadius(g.player.X, g.player.Y, g.player.PickupRadius, g.mapX, g.mapY, g.diamonds)
+			diamondPickup, di := diamond.PickupRadius(g.player.X, g.player.Y, g.player.PickupRadius, g.mapX, g.mapY, g.diamonds, g.bossCooldown)
 
 			if diamondPickup {
 				fmt.Println(lineSeparation)
@@ -184,11 +236,23 @@ func (g *Game) Update() error {
 				g.diamonds[di].DetectedInPickupRadius = true
 			}
 
-			g.diamonds = diamond.DragToPlayer(g.diamonds, playerWorldX, playerWorldY, &g.player.Diamond)
+			collect := false
 
-			card.Create(&g.cards, &g.player.Diamond, &g.player.DiamondQuota, screenHeight, g.bossCooldown)
+			g.diamonds, collect = diamond.DragToPlayer(g.diamonds, playerWorldX, playerWorldY, &g.player.Diamond, g.bossCooldown)
 
-			zombie.Attack(playerWorldX, playerWorldY, g.player.R, &g.zombies, &g.player.Lifes)
+			if collect {
+				g.tingSnd.Rewind()
+				g.tingSnd.Play()
+			}
+
+			card.Create(&g.cards, &g.player.Diamond, &g.player.DiamondQuota, screenHeight, g.bossCooldown, false)
+
+			oldLife := g.player.Lifes
+			zombie.Attack(playerWorldX, playerWorldY, g.player.R, &g.zombies, &g.player.Lifes, g.impactSnd)
+			if g.player.Lifes < oldLife {
+				g.shake.duration = 22
+				g.shake.intensity = 30
+			}
 
 			antiCheatLimit(&g.player.Cadence, &g.player.Speed)
 
@@ -196,8 +260,19 @@ func (g *Game) Update() error {
 
 				g.trees = []tree{}
 
-				zombie.UpdateBossPhase(&g.zombies, &g.bossCooldown, &g.player.Angle, g.player.X, g.player.Y, g.player.Speed, bossImg, &g.mapX, &g.mapY)
+				if g.bossCooldown == 0 {
+					g.bossCnt++
+				}
+
+				zombie.UpdateBossPhase(&g.zombies, &g.bossCooldown, &g.player.Angle, g.player.X, g.player.Y, g.player.Speed, bossImg, &g.mapX, &g.mapY, g.BossAlarmSnd)
 			}
+
+			if g.bossCnt == 1 && g.bossCooldown > 0 {
+				g.setBossCntValue--
+				g.bossCnt = 0 + g.setBossCntValue
+				card.Create(&g.cards, &g.player.Diamond, &g.player.DiamondQuota, screenHeight, g.bossCooldown, true)
+			}
+
 		}
 	} else {
 		touches := inpututil.AppendJustPressedKeys(nil)
@@ -207,12 +282,17 @@ func (g *Game) Update() error {
 		}
 	}
 
-	g.upgrades = card.DetectClick(&g.cards, g.upgrades, &g.player.Cadence, &g.player.Speed, &g.player.ShootRange, &g.clicPrecedent, &g.player.PickupRadius)
+	g.upgrades = card.DetectClick(&g.cards, g.upgrades, &g.player.Cadence, &g.player.Speed, &g.player.ShootRange, &g.clicPrecedent, &g.player.PickupRadius, &g.player.MaxHealth, &g.player.Lifes)
 
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
+	var shakeX, shakeY float64
+	if g.shake.duration > 0 {
+		shakeX = (rand.Float64()*2 - 1) * g.shake.intensity
+		shakeY = (rand.Float64()*2 - 1) * g.shake.intensity
+	}
 
 	if g.bossCooldown <= 0 {
 
@@ -229,17 +309,17 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		op.GeoM.Scale(scale, scale)
 
 		// 3. Déplacer au centre de l'écran
-		op.GeoM.Translate(screenWidth/2+g.mapX, screenHeight/2+g.mapY)
+		op.GeoM.Translate(screenWidth/2+g.mapX+shakeX, screenHeight/2+g.mapY+shakeY)
 
 		screen.DrawImage(fenceImg, op)
 
 	} else {
 
 		// debug
-		vector.StrokeCircle(screen, float32(g.player.X), float32(g.player.Y), float32(g.player.PickupRadius), 2, color.RGBA{0, 0, 120, 120}, true)
+		vector.StrokeCircle(screen, float32(g.player.X+shakeX), float32(g.player.Y+shakeY), float32(g.player.PickupRadius), 2, color.RGBA{0, 0, 120, 120}, true)
 
 		for _, d := range g.diamonds {
-			d.Draw(screen, g.mapX, g.mapY)
+			d.Draw(screen, g.mapX+shakeX, g.mapY+shakeY)
 		}
 
 		for _, t := range g.trees {
@@ -247,7 +327,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 			op.GeoM.Scale(t.s, t.s)
 
-			op.GeoM.Translate(t.x+g.mapX, t.y+g.mapY)
+			op.GeoM.Translate(t.x+g.mapX+shakeX, t.y+g.mapY+shakeY)
 
 			screen.DrawImage(t.Img, op)
 		}
@@ -276,7 +356,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	// zombies
 	for _, z := range g.zombies {
-		z.Draw(screen, g.mapX, g.mapY)
+		z.Draw(screen, g.mapX+shakeX, g.mapY+shakeY)
 
 		if z.Boss {
 			print("")
@@ -284,7 +364,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 
 	// player
-	g.player.Draw(screen)
+	player.Player.Draw(g.player, screen, g.shake.intensity, g.shake.duration)
 
 	for _, b := range g.bullets {
 		b.Draw(screen)
@@ -293,7 +373,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// jauge de vie du player
 	vector.StrokeRect(screen, 10, 10, 510, 60, 10, color.RGBA{255, 255, 255, 255}, true)
 
-	vector.DrawFilledRect(screen, 15, 15, float32(g.player.Lifes)*(500/100), 54, color.RGBA{0, 255, 0, 255}, true)
+	vector.DrawFilledRect(screen, 15, 15, float32(g.player.Lifes)*(500/float32(g.player.MaxHealth)), 54, color.RGBA{0, 255, 0, 255}, true)
 
 	if g.state == StateGameOver {
 		vector.DrawFilledRect(screen, 0, 0, screenWidth, screenHeight, color.RGBA{50, 50, 50, 240}, true)
@@ -303,7 +383,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		gameutil.DrawText("Press any key to restart a game!", 70, screenWidth-200, 200, screenHeight-300, 0, screen, color.RGBA{160, 160, 160, 255}, mplusSource)
 	}
 
-	g.ice.Draw(screen, g.mapX, g.mapY)
+	g.ice.Draw(screen, g.mapX+shakeX, g.mapY+shakeY)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
@@ -311,18 +391,12 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 }
 
 func main() {
+	fmt.Println("game started with success")
+
+	audioContext = audio.NewContext(44100)
+
 	ebiten.SetWindowSize(screenWidth, screenHeight)
 	ebiten.SetFullscreen(true)
-
-	diamondImg = loadImage("blue diamond.png")
-	treeImg = loadImage("tree.png")
-	cardImg = loadImage("card.png")
-	zombieImg = loadImage("zombie.png")
-	playerImg = loadImage("player.png")
-	bulletImg = loadImage("bullet.png")
-	fenceImg = loadImage("fence.png")
-	bossImg = loadImage("zombieKing.png")
-	iceCircleImg = loadImage("iceCircle.png")
 
 	s2, _ := text.NewGoTextFaceSource(bytes.NewReader(roboto))
 
@@ -335,9 +409,20 @@ func main() {
 
 	mplusSource = s
 
+	// load images
+	diamondImg = loadImage("blue diamond.png")
+	treeImg = loadImage("tree.png")
+	cardImg = loadImage("card.png")
+	zombieImg = loadImage("zombie.png")
+	playerImg = loadImage("player.png")
+	bulletImg = loadImage("bullet.png")
+	fenceImg = loadImage("fence.png")
+	bossImg = loadImage("zombieKing.png")
+	iceCircleImg = loadImage("iceCircle.png")
+
 	g := &Game{
 		state:                 StatePlaying,
-		bossCooldown:          1800,
+		bossCooldown:          100,
 		setSpawnZombieCadence: 60,
 		upgrades: map[string]int{
 			"pierce":  0,
@@ -351,6 +436,19 @@ func main() {
 			img: cardImg,
 		},
 	}
+	// load sounds
+	g.BooomSnd, err = gameutil.LoadSound(44100, audioContext, "miniBoom.wav")
+	g.BossAlarmSnd, err = gameutil.LoadSound(44100, audioContext, "alarm.mp3")
+	g.tingSnd, err = gameutil.LoadSound(44100, audioContext, "ting.mp3")
+	g.impactSnd, err = gameutil.LoadSound(44100, audioContext, "impact.wav")
+	g.GameOverSnd, err = gameutil.LoadSound(44100, audioContext, "gameOver.wav")
+	g.principalMusic, err = gameutil.LoadSound(44100, audioContext, "principal music.wav")
+
+	g.principalMusic.SetVolume(.2)
+
+	if err != nil {
+		panic(err)
+	}
 
 	g.player.Initialization(playerImg, screenWidth, screenHeight)
 
@@ -362,6 +460,8 @@ func main() {
 			Img: treeImg,
 		})
 	}
+
+	fmt.Println("game build started with success")
 
 	ebiten.SetWindowTitle("zombie_rush")
 	if err := ebiten.RunGame(g); err != nil {

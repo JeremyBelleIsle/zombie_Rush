@@ -18,7 +18,7 @@ type Card struct {
 	clr         color.RGBA
 }
 
-func Create(cards *[]Card, diamondCount *int, diamondQuota *int, screenHeight float64, bossCooldown int) {
+func Create(cards *[]Card, diamondCount *int, diamondQuota *int, screenHeight float64, bossCooldown int, special bool) {
 
 	// s'en aller immédiatement si c'est le boss
 	if bossCooldown <= 0 {
@@ -26,43 +26,57 @@ func Create(cards *[]Card, diamondCount *int, diamondQuota *int, screenHeight fl
 	}
 
 	// modifier 1 à genre 7
-	if *diamondCount >= *diamondQuota {
-		*diamondQuota += 2
-		*diamondCount = 0 // ← ici, une seule fois
+	if *diamondCount >= *diamondQuota || special {
+		if !special {
+			*diamondQuota += 2
+			*diamondCount = 0 // ← ici, une seule fois
+		}
 
 		type card2 struct {
 			name        string
 			description string
 		}
-		cards2 := []card2{
-			{"pierce", "the bullets pierce the enemies"},
-			{"machine gun", "the cadence is accelerated"},
-			{"vampire", "when you kill a zombie you regenerate"},
-			{"treasure hunter", "attracts diamonds from a greater distance"},
-			{"player speed", "you go faster"},
-			{"sniper", "you can shoot from further away"},
-			{"fridge", "It freezes enemies around the bullet if it hits its target."},
+
+		cards2 := []card2{}
+
+		if !special {
+			cards2 = []card2{
+				{"pierce", "the bullets pierce the enemies"},
+				{"machine gun", "the cadence is accelerated"},
+				{"vampire", "when you kill a zombie you regenerate"},
+				{"treasure hunter", "attracts diamonds from a greater distance"},
+				{"player speed", "you go faster"},
+				{"sniper", "you can shoot from further away"},
+				{"fridge", "It freezes enemies around the bullet if it hits its target."},
+			}
+		} else {
+			cards2 = []card2{
+				{"guided missile", "your bullet always hits its target"},
+				{"care kit", "you regenerate half of your maximum HP"},
+				{"tank", "you got more max HP"},
+			}
 		}
 
 		usedIndices := map[int]bool{}
+		position := 0
 
-		for i := 0; i < 3; i++ {
-			nameInt := rand.IntN(len(cards2))
-			for usedIndices[nameInt] {
+		for position < 3 {
+			var nameInt int
+			retry := 0
+			for {
 				nameInt = rand.IntN(len(cards2))
-			}
-			usedIndices[nameInt] = true
-
-			if nameInt == 1 {
-				if rand.IntN(2) == 1 {
-					i--
-					continue
+				if !usedIndices[nameInt] {
+					break
+				}
+				retry++
+				if retry > 100 { // Prevent infinite loop
+					break
 				}
 			}
-
+			usedIndices[nameInt] = true
 			def := cards2[nameInt]
 			*cards = append(*cards, Card{
-				x:           float64(i*775 + 160),
+				x:           float64(position*775 + 160),
 				y:           30,
 				w:           775,
 				h:           screenHeight - 60,
@@ -70,11 +84,12 @@ func Create(cards *[]Card, diamondCount *int, diamondQuota *int, screenHeight fl
 				name:        def.name,
 				clr:         color.RGBA{0, 200, 0, 255},
 			})
+			position++
 		}
 	}
 }
 
-func DetectClick(cards *[]Card, upgrades map[string]int, cadence *float64, playerSpeed *float64, shootRange *float64, clicPrecedent *bool, pickupRadius *float64) map[string]int {
+func DetectClick(cards *[]Card, upgrades map[string]int, cadence *float64, playerSpeed *float64, shootRange *float64, clicPrecedent *bool, pickupRadius *float64, maxHealth *int, health *int) map[string]int {
 
 	xC, yC := ebiten.CursorPosition()
 	x, y := float64(xC), float64(yC)
@@ -104,6 +119,12 @@ func DetectClick(cards *[]Card, upgrades map[string]int, cadence *float64, playe
 					*shootRange += 200
 				case "fridge":
 					upgrades["fridge"] += 8
+				case "guided missile":
+					upgrades["guided missile"] += 40
+				case "care kit":
+					*health += *maxHealth / 2
+				case "tank":
+					*maxHealth += 30
 				}
 
 				*cards = []Card{}

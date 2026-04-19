@@ -9,6 +9,7 @@ import (
 
 	"github.com/JeremyBelleIsle/gameutil"
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/audio"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
@@ -46,7 +47,7 @@ func Movement(zombies []Zombie, px, py float64, ice ice.Ice) []Zombie {
 	return zombies
 }
 
-func Spawn(zombies []Zombie, addZombieCooldown *float64, setSpawnZombieCadence float64, zombieImg *ebiten.Image, screenWidht, screenHeight int) []Zombie {
+func Spawn(zombies []Zombie, addZombieCooldown *float64, setSpawnZombieCadence float64, zombieImg *ebiten.Image, screenWidht, screenHeight int, mapX, mapY float64) []Zombie {
 
 	if *addZombieCooldown > 0 {
 		*addZombieCooldown--
@@ -54,8 +55,8 @@ func Spawn(zombies []Zombie, addZombieCooldown *float64, setSpawnZombieCadence f
 		*addZombieCooldown = setSpawnZombieCadence
 
 		zombies = append(zombies, Zombie{
-			X:      float64(rand.IntN(screenWidht+1000) + -500),
-			Y:      float64(rand.IntN(screenHeight+1000) + -500),
+			X:      float64(rand.IntN(screenWidht+1000)+-500) - mapX,
+			Y:      float64(rand.IntN(screenHeight+1000)+-500) - mapY,
 			R:      40,
 			s:      .2,
 			Health: 1,
@@ -67,7 +68,7 @@ func Spawn(zombies []Zombie, addZombieCooldown *float64, setSpawnZombieCadence f
 	return zombies
 }
 
-func Attack(px, py, pr float64, zombies *[]Zombie, lifes *int) {
+func Attack(px, py, pr float64, zombies *[]Zombie, lifes *int, impactSnd *audio.Player) {
 	deleteElems := []int{}
 
 	for i, z := range *zombies {
@@ -76,6 +77,9 @@ func Attack(px, py, pr float64, zombies *[]Zombie, lifes *int) {
 			if !z.Boss {
 				deleteElems = append(deleteElems, i)
 				*lifes -= 8
+
+				impactSnd.Rewind()
+				impactSnd.Play()
 			} else {
 				*lifes--
 			}
@@ -95,6 +99,7 @@ func UpdateBossPhase(
 	playerSpeed float64,
 	bossImg *ebiten.Image,
 	mapX, mapY *float64,
+	alarmSnd *audio.Player,
 ) {
 	// 1. Filtrage des zombies : on modifie la slice pointée
 	var remaining []Zombie
@@ -107,13 +112,17 @@ func UpdateBossPhase(
 	*zombies = remaining
 
 	if *bossCooldown == 0 {
+
+		alarmSnd.Rewind()
+		alarmSnd.Play()
+
 		*zombies = append(*zombies, Zombie{
 			X:      playerX + 1000,
 			Y:      playerY,
 			R:      200,
 			s:      2,
 			img:    bossImg,
-			speed:  playerSpeed - 1,
+			speed:  playerSpeed - 3,
 			Boss:   true,
 			Health: 10,
 		})

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"math/rand/v2"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -18,6 +19,7 @@ type Player struct {
 	ShootCooldown int
 	Cadence       float64
 	Lifes         int
+	MaxHealth     int
 	Diamond       int
 	DiamondQuota  int
 	clr           color.RGBA
@@ -42,6 +44,7 @@ func (p *Player) Initialization(playerImg *ebiten.Image, screenWidth, screenHeig
 	p.X = screenWidth / 2
 	p.Y = screenHeight / 2
 	p.R = 70
+	p.MaxHealth = 100
 	p.PickupRadius = 80
 	p.Cadence = 60
 	p.ShootRange = 700
@@ -93,19 +96,20 @@ func Move(px, py, pr float64, mapX, mapY *float64, speed float64, bossCooldown i
 
 }
 
-func (p Player) Draw(screen *ebiten.Image) {
-	op := &ebiten.DrawImageOptions{}
+func (p Player) Draw(screen *ebiten.Image, shakeIntensity float64, shakeDuration int) {
+	var shakeX, shakeY float64
+	if shakeDuration > 0 {
+		shakeX = (rand.Float64()*2 - 1) * shakeIntensity
+		shakeY = (rand.Float64()*2 - 1) * shakeIntensity
+	}
+	playerOp := &ebiten.DrawImageOptions{}
 
-	w := p.img.Bounds().Dx()
-	h := p.img.Bounds().Dy()
+	playerOp.GeoM.Translate(-float64(p.img.Bounds().Dx())/2, -float64(p.img.Bounds().Dy())/2)
 
-	op.GeoM.Translate(-float64(w)/2, -float64(h)/2)
+	playerOp.GeoM.Rotate(p.Angle)
 
-	op.GeoM.Rotate(p.Angle)
+	playerOp.GeoM.Scale(.5, .5)
 
-	op.GeoM.Scale(.5, .5)
-
-	op.GeoM.Translate(p.X, p.Y)
-
-	screen.DrawImage(p.img, op)
+	playerOp.GeoM.Translate(p.X+shakeX, p.Y+shakeY)
+	screen.DrawImage(p.img, playerOp)
 }

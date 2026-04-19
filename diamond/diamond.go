@@ -14,7 +14,12 @@ type Diamond struct {
 	img                    *ebiten.Image
 }
 
-func DragToPlayer(diamonds []Diamond, PWX, PWY float64, playerDiamonds *int) []Diamond {
+func DragToPlayer(diamonds []Diamond, PWX, PWY float64, playerDiamonds *int, bossCooldown int) ([]Diamond, bool) {
+
+	if bossCooldown <= 0 {
+		return diamonds, false
+	}
+
 	for i := len(diamonds) - 1; i >= 0; i-- {
 		d := &diamonds[i]
 
@@ -23,22 +28,25 @@ func DragToPlayer(diamonds []Diamond, PWX, PWY float64, playerDiamonds *int) []D
 
 			d.x, d.y = float64(f32x), float64(f32y)
 
-			// Maintenant, la suppression ne fera plus planter la boucle
-
 			if math.Abs(d.x-PWX) < 31 && math.Abs(d.y-PWY) < 31 {
 
 				diamonds = slices.Delete(diamonds, i, i+1)
 
 				*playerDiamonds++
 
+				return diamonds, true
 			}
 		}
 	}
 
-	return diamonds
+	return diamonds, false
 }
 
-func PickupRadius(px, py, pr float64, mapX, mapY float64, diamonds []Diamond) (bool, int) {
+func PickupRadius(px, py, pr float64, mapX, mapY float64, diamonds []Diamond, bossCooldown int) (bool, int) {
+
+	if bossCooldown <= 0 {
+		return false, 0
+	}
 
 	for i, d := range diamonds {
 		if gameutil.CircleCollision(px-mapX, py-mapY, pr, d.x, d.y, d.r) {
@@ -49,7 +57,11 @@ func PickupRadius(px, py, pr float64, mapX, mapY float64, diamonds []Diamond) (b
 	return false, 0
 }
 
-func Spawn(diamonds *[]Diamond, x, y, diamondStartedRadius float64, diamondImg *ebiten.Image) {
+func Spawn(diamonds *[]Diamond, x, y, diamondStartedRadius float64, diamondImg *ebiten.Image, bossCooldown int) {
+
+	if bossCooldown <= 0 {
+		return
+	}
 
 	*diamonds = append(*diamonds, Diamond{
 		x:   x,
