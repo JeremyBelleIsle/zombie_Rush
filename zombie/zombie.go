@@ -1,10 +1,12 @@
 package zombie
 
 import (
+	"fmt"
 	"image/color"
 	"math"
 	"math/rand/v2"
 	"slices"
+	"zombie_rush/arrow"
 	"zombie_rush/ice"
 
 	"github.com/JeremyBelleIsle/gameutil"
@@ -14,12 +16,15 @@ import (
 )
 
 type Zombie struct {
-	img        *ebiten.Image
-	X, Y, R, s float64
-	speed      float64
-	angle      float64
-	Health     int
-	freeze     int
+	img              *ebiten.Image
+	X, Y, R, s       float64
+	speed            float64
+	angle            float64
+	Health           int
+	freeze           int
+	typeString       string // archer, normal, boss
+	canShootCooldown int    // si c'est un archer
+	shootingCooldown int    // si c'est un archer
 
 	Boss bool
 }
@@ -41,31 +46,92 @@ func Movement(zombies []Zombie, px, py float64, ice ice.Ice) []Zombie {
 
 		z.angle = math.Atan2(py-z.Y, px-z.X)
 
+		if z.shootingCooldown > 0 {
+			continue
+		}
+
 		z.X, z.Y = float64(x), float64(y)
 	}
 
 	return zombies
 }
 
-func Spawn(zombies []Zombie, addZombieCooldown *float64, setSpawnZombieCadence float64, zombieImg *ebiten.Image, screenWidht, screenHeight int, mapX, mapY float64) []Zombie {
+func Spawn(zombies []Zombie, addZombieCooldown *float64, setSpawnZombieCadence float64, zombieImg *ebiten.Image, zombieArcherImg *ebiten.Image, screenWidht, screenHeight int, mapX, mapY float64, canAddArcherCooldown int) []Zombie {
 
 	if *addZombieCooldown > 0 {
 		*addZombieCooldown--
 	} else {
 		*addZombieCooldown = setSpawnZombieCadence
 
-		zombies = append(zombies, Zombie{
-			X:      float64(rand.IntN(screenWidht+1000)+-500) - mapX,
-			Y:      float64(rand.IntN(screenHeight+1000)+-500) - mapY,
-			R:      40,
-			s:      .2,
-			Health: 1,
-			speed:  float64(rand.IntN(2)+5) + rand.Float64(),
-			img:    zombieImg,
-		})
+		if canAddArcherCooldown <= 0 && rand.IntN(3) == 1 {
+			zombies = append(zombies, Zombie{
+				X:          float64(rand.IntN(screenWidht+1000)+-500) - mapX,
+				Y:          float64(rand.IntN(screenHeight+1000)+-500) - mapY,
+				R:          40,
+				s:          .3,
+				Health:     1,
+				typeString: "archer",
+				speed:      float64(rand.IntN(2)+5) + rand.Float64(),
+				img:        zombieArcherImg,
+			})
+		} else {
+			zombies = append(zombies, Zombie{
+				X:          float64(rand.IntN(screenWidht+1000)+-500) - mapX,
+				Y:          float64(rand.IntN(screenHeight+1000)+-500) - mapY,
+				R:          40,
+				s:          .2,
+				Health:     1,
+				typeString: "normal",
+				speed:      float64(rand.IntN(2)+5) + rand.Float64(),
+				img:        zombieImg,
+			})
+		}
 	}
 
 	return zombies
+}
+
+func ArcherShooting(zombies []Zombie, arrows []arrow.Arrow, arrowImg *ebiten.Image, pWorldX, pWorldY float64) []arrow.Arrow {
+	for i := range zombies {
+		z := &zombies[i]
+
+		if z.typeString != "archer" {
+			continue
+		}
+
+		// Décrémenter les cooldowns
+		if z.canShootCooldown > 0 {
+			z.canShootCooldown--
+		}
+
+		if z.shootingCooldown > 0 {
+			z.shootingCooldown--
+		}
+
+		// Si canShootCooldown est terminé, on relance une séquence de tir
+		if z.canShootCooldown == 0 && z.shootingCooldown == 0 {
+			// Calculer la distance entre le player et l'archer
+			dx := pWorldX - z.X
+			dy := pWorldY - z.Y
+			distance := math.Sqrt(dx*dx + dy*dy)
+
+			// Créer la flèche seulement si le player est à proximité (ex: 7000 pixels)
+			if distance < 7000 {
+				z.shootingCooldown = 48
+			}
+			z.canShootCooldown = 135
+		}
+
+		// Créer la flèche au moment opportun
+		if z.shootingCooldown == 15 {
+			arrow.Create(pWorldX, pWorldY, z.X, z.Y, arrowImg, &arrows)
+			fmt.Println("========\n create a arrow \n=========")
+
+		}
+
+	}
+
+	return arrows
 }
 
 func Attack(px, py, pr float64, zombies *[]Zombie, lifes *int, impactSnd *audio.Player) {
@@ -117,14 +183,15 @@ func UpdateBossPhase(
 		alarmSnd.Play()
 
 		*zombies = append(*zombies, Zombie{
-			X:      playerX + 1000,
-			Y:      playerY,
-			R:      200,
-			s:      2,
-			img:    bossImg,
-			speed:  playerSpeed - 3,
-			Boss:   true,
-			Health: 10,
+			X:          playerX + 1000,
+			Y:          playerY,
+			R:          200,
+			s:          2,
+			img:        bossImg,
+			speed:      playerSpeed - 3,
+			Health:     10,
+			typeString: "boss",
+			Boss:       true,
 		})
 
 		*mapX = 0

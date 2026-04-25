@@ -1,7 +1,6 @@
 package bullet
 
 import (
-	"image/color"
 	"math"
 	"math/rand/v2"
 	"slices"
@@ -14,10 +13,10 @@ import (
 
 type Bullet struct {
 	img        *ebiten.Image
+	guided     bool
 	x, y, w, h float64
 	angle      float64
 	vx, vy     float64
-	clr        color.RGBA
 }
 
 func HitZombie(zombies []zombie.Zombie, bullets []Bullet, WX, WY float64) (bool, int, int) {
@@ -37,7 +36,7 @@ func HitZombie(zombies []zombie.Zombie, bullets []Bullet, WX, WY float64) (bool,
 
 }
 
-func Create(px, py, pWorldX, pWorldY float64, playerAngle *float64, shootRange float64, cadence float64, zombies []zombie.Zombie, bullets []Bullet, cooldown *int, bulletImg *ebiten.Image) []Bullet {
+func Create(px, py, pWorldX, pWorldY float64, playerAngle *float64, shootRange float64, cadence float64, zombies []zombie.Zombie, bullets []Bullet, cooldown *int, bulletImg *ebiten.Image, upgrades map[string]int) []Bullet {
 	// 1. Gestion du délai de tir
 	if *cooldown > 0 {
 		*cooldown--
@@ -75,23 +74,52 @@ func Create(px, py, pWorldX, pWorldY float64, playerAngle *float64, shootRange f
 
 		// On ajoute la balle aux coordonnées de l'écran (px, py) comme tu l'as précisé
 		bullets = append(bullets, Bullet{
-			x:     px,
-			y:     py,
-			w:     16,
-			h:     16,
-			angle: math.Atan2(dy, dx),
-			img:   bulletImg,
-			vx:    (dx / dist) * bulletSpeed,
-			vy:    (dy / dist) * bulletSpeed,
-			clr:   color.RGBA{0, 255, 0, 255},
+			x:      px,
+			y:      py,
+			w:      16,
+			h:      16,
+			guided: upgrades["guided missile"] >= rand.IntN(100),
+			angle:  math.Atan2(dy, dx),
+			img:    bulletImg,
+			vx:     (dx / dist) * bulletSpeed,
+			vy:     (dy / dist) * bulletSpeed,
 		})
 	}
 
 	return bullets
 }
 
-func Move(bullets []Bullet, px, py float64) []Bullet {
+func Move(bullets []Bullet, px, py float64, zombies []zombie.Zombie, mapX, mapY float64) []Bullet {
 	for i := len(bullets) - 1; i >= 0; i-- {
+		if bullets[i].guided {
+			// Recherche du zombie le plus proche en coordonnées écran
+			var closestZombie *zombie.Zombie
+			minDist := math.MaxFloat64
+
+			for j := range zombies {
+				z := &zombies[j]
+				dx := (z.X + mapX) - bullets[i].x
+				dy := (z.Y + mapY) - bullets[i].y
+				distSq := dx*dx + dy*dy
+				if distSq < minDist {
+					minDist = distSq
+					closestZombie = z
+				}
+			}
+
+			if closestZombie != nil {
+				dx := (closestZombie.X + mapX) - bullets[i].x
+				dy := (closestZombie.Y + mapY) - bullets[i].y
+				dist := math.Sqrt(dx*dx + dy*dy)
+				if dist > 0 {
+					bulletSpeed := 15.0
+					bullets[i].vx = (dx / dist) * bulletSpeed
+					bullets[i].vy = (dy / dist) * bulletSpeed
+					bullets[i].angle = math.Atan2(dy, dx)
+				}
+			}
+		}
+
 		bullets[i].x += bullets[i].vx
 		bullets[i].y += bullets[i].vy
 

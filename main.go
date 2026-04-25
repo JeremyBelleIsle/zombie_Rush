@@ -9,6 +9,7 @@ import (
 	"log"
 	"math/rand/v2"
 	"os"
+	"zombie_rush/arrow"
 	"zombie_rush/bullet"
 	"zombie_rush/card"
 	"zombie_rush/diamond"
@@ -50,6 +51,7 @@ type Shake struct {
 }
 
 type Game struct {
+	canAddArcherCooldown  int
 	bossCooldown          int
 	bossCnt               int
 	setBossCntValue       int
@@ -60,6 +62,7 @@ type Game struct {
 	cards                 []card.Card
 	diamonds              []diamond.Diamond
 	bullets               []bullet.Bullet
+	arrows                []arrow.Arrow
 	zombies               []zombie.Zombie
 	trees                 []tree
 	BooomSnd              *audio.Player
@@ -79,15 +82,17 @@ type Game struct {
 
 var (
 	// images
-	diamondImg   *ebiten.Image
-	treeImg      *ebiten.Image
-	cardImg      *ebiten.Image
-	zombieImg    *ebiten.Image
-	playerImg    *ebiten.Image
-	bulletImg    *ebiten.Image
-	fenceImg     *ebiten.Image
-	bossImg      *ebiten.Image
-	iceCircleImg *ebiten.Image
+	diamondImg      *ebiten.Image
+	treeImg         *ebiten.Image
+	cardImg         *ebiten.Image
+	zombieImg       *ebiten.Image
+	playerImg       *ebiten.Image
+	bulletImg       *ebiten.Image
+	fenceImg        *ebiten.Image
+	bossImg         *ebiten.Image
+	iceCircleImg    *ebiten.Image
+	zombieArcherImg *ebiten.Image
+	arrowImg        *ebiten.Image
 )
 
 // sound
@@ -161,6 +166,7 @@ func (g *Game) reset() {
 }
 
 func (g *Game) Update() error {
+
 	// Play principal music on loop
 	if !g.musicStarted {
 		g.musicStarted = true
@@ -207,17 +213,23 @@ func (g *Game) Update() error {
 			playerWorldX := g.player.X - g.mapX
 			playerWorldY := g.player.Y - g.mapY
 
+			g.zombies = zombie.Spawn(g.zombies, &g.addZombieCooldown, g.setSpawnZombieCadence, zombieImg, zombieArcherImg, screenWidth, screenHeight, g.mapX, g.mapY, g.canAddArcherCooldown)
+
 			g.zombies = zombie.Movement(g.zombies, playerWorldX, playerWorldY, g.ice)
 
-			g.zombies = zombie.Spawn(g.zombies, &g.addZombieCooldown, g.setSpawnZombieCadence, zombieImg, screenWidth, screenHeight, g.mapX, g.mapY)
+			g.arrows = zombie.ArcherShooting(g.zombies, g.arrows, arrowImg, playerWorldX, playerWorldY)
+
+			g.arrows = arrow.ArrowsVsPlayerColl(g.arrows, &g.player.Lifes, playerWorldX, playerWorldY, g.player.R)
 
 			previewSlice := g.bullets
-			g.bullets = bullet.Create(g.player.X, g.player.Y, playerWorldX, playerWorldY, &g.player.Angle, g.player.ShootRange, g.player.Cadence, g.zombies, g.bullets, &g.player.ShootCooldown, bulletImg)
+			g.bullets = bullet.Create(g.player.X, g.player.Y, playerWorldX, playerWorldY, &g.player.Angle, g.player.ShootRange, g.player.Cadence, g.zombies, g.bullets, &g.player.ShootCooldown, bulletImg, g.upgrades)
 			if len(previewSlice) != len(g.bullets) {
 				g.BooomSnd.Rewind()
 				g.BooomSnd.Play()
 			}
-			bullet.Move(g.bullets, g.player.X, g.player.Y)
+			g.arrows = arrow.Move(playerWorldX, playerWorldY, g.arrows)
+
+			bullet.Move(g.bullets, g.player.X, g.player.Y, g.zombies, g.mapX, g.mapY)
 
 			bulletHitZombie, zi, bi := bullet.HitZombie(g.zombies, g.bullets, g.mapX, g.mapY)
 
@@ -366,12 +378,18 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// player
 	player.Player.Draw(g.player, screen, g.shake.intensity, g.shake.duration)
 
+	// bullets
 	for _, b := range g.bullets {
 		b.Draw(screen)
 	}
 
+	// arrows
+	for _, a := range g.arrows {
+		a.Draw(screen, g.mapX, g.mapY)
+	}
+
 	// jauge de vie du player
-	vector.StrokeRect(screen, 10, 10, 510, 60, 10, color.RGBA{255, 255, 255, 255}, true)
+	vector.StrokeRect(screen, 10, 10, (float32(g.player.MaxHealth)*5)+10, 60, 10, color.RGBA{255, 255, 255, 255}, true)
 
 	vector.DrawFilledRect(screen, 15, 15, float32(g.player.Lifes)*(500/float32(g.player.MaxHealth)), 54, color.RGBA{0, 255, 0, 255}, true)
 
@@ -419,11 +437,14 @@ func main() {
 	fenceImg = loadImage("fence.png")
 	bossImg = loadImage("zombieKing.png")
 	iceCircleImg = loadImage("iceCircle.png")
+	zombieArcherImg = loadImage("archer zombie.png")
+	arrowImg = loadImage("arrow.png")
 
 	g := &Game{
 		state:                 StatePlaying,
-		bossCooldown:          100,
-		setSpawnZombieCadence: 60,
+		bossCooldown:          1800,
+		setSpawnZombieCadence: 30,
+		canAddArcherCooldown:  1800,
 		upgrades: map[string]int{
 			"pierce":  0,
 			"vampire": 0,
