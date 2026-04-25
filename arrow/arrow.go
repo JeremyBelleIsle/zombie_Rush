@@ -59,7 +59,7 @@ func ArrowsVsPlayerColl(arrows []Arrow, playerHealth *int, px, py, pr float64) [
 		a := &arrows[i]
 
 		if gameutil.CircleRectCollision(px, py, pr, a.x, a.y, a.w, a.h) {
-			*playerHealth--
+			*playerHealth -= 5
 
 			arrows = slices.Delete(arrows, i, i+1)
 		}

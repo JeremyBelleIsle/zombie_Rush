@@ -213,7 +213,7 @@ func (g *Game) Update() error {
 			playerWorldX := g.player.X - g.mapX
 			playerWorldY := g.player.Y - g.mapY
 
-			g.zombies = zombie.Spawn(g.zombies, &g.addZombieCooldown, g.setSpawnZombieCadence, zombieImg, zombieArcherImg, screenWidth, screenHeight, g.mapX, g.mapY, g.canAddArcherCooldown)
+			g.zombies = zombie.Spawn(g.zombies, &g.addZombieCooldown, g.setSpawnZombieCadence, zombieImg, zombieArcherImg, screenWidth, screenHeight, g.mapX, g.mapY, &g.canAddArcherCooldown, g.player.X, g.player.Y)
 
 			g.zombies = zombie.Movement(g.zombies, playerWorldX, playerWorldY, g.ice)
 
@@ -443,8 +443,8 @@ func main() {
 	g := &Game{
 		state:                 StatePlaying,
 		bossCooldown:          1800,
-		setSpawnZombieCadence: 30,
-		canAddArcherCooldown:  1800,
+		setSpawnZombieCadence: 60,
+		canAddArcherCooldown:  0,
 		upgrades: map[string]int{
 			"pierce":  0,
 			"vampire": 0,

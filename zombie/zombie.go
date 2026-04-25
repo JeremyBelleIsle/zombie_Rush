@@ -56,17 +56,26 @@ func Movement(zombies []Zombie, px, py float64, ice ice.Ice) []Zombie {
 	return zombies
 }
 
-func Spawn(zombies []Zombie, addZombieCooldown *float64, setSpawnZombieCadence float64, zombieImg *ebiten.Image, zombieArcherImg *ebiten.Image, screenWidht, screenHeight int, mapX, mapY float64, canAddArcherCooldown int) []Zombie {
+func Spawn(zombies []Zombie, addZombieCooldown *float64, setSpawnZombieCadence float64, zombieImg *ebiten.Image, zombieArcherImg *ebiten.Image, screenWidht, screenHeight int, mapX, mapY float64, canAddArcherCooldown *int, px, py float64) []Zombie {
 
 	if *addZombieCooldown > 0 {
 		*addZombieCooldown--
 	} else {
 		*addZombieCooldown = setSpawnZombieCadence
 
-		if canAddArcherCooldown <= 0 && rand.IntN(3) == 1 {
+		x, y := float64(rand.IntN(screenWidht+1000)+-500)-mapX, float64(rand.IntN(screenWidht+1000)+-500)-mapY
+
+		dx := x - (px - mapX)
+		dy := y - (py - mapY)
+		distance := math.Sqrt(dx*dx + dy*dy)
+		if distance < 200 {
+			return zombies
+		}
+
+		if *canAddArcherCooldown <= 0 && rand.IntN(2) == 1 {
 			zombies = append(zombies, Zombie{
-				X:          float64(rand.IntN(screenWidht+1000)+-500) - mapX,
-				Y:          float64(rand.IntN(screenHeight+1000)+-500) - mapY,
+				X:          x,
+				Y:          y,
 				R:          40,
 				s:          .3,
 				Health:     1,
@@ -85,6 +94,8 @@ func Spawn(zombies []Zombie, addZombieCooldown *float64, setSpawnZombieCadence f
 				speed:      float64(rand.IntN(2)+5) + rand.Float64(),
 				img:        zombieImg,
 			})
+
+			*canAddArcherCooldown--
 		}
 	}
 
