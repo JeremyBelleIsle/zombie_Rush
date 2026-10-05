@@ -204,6 +204,8 @@ func (g *Game) Update() error {
 		}
 
 		if len(g.cards) == 0 {
+			ebiten.SetCursorMode(ebiten.CursorModeCaptured)
+
 			g.setSpawnZombieCadence -= .0006
 			g.bossCooldown--
 
@@ -285,6 +287,10 @@ func (g *Game) Update() error {
 				card.Create(&g.cards, &g.player.Diamond, &g.player.DiamondQuota, screenHeight, g.bossCooldown, true)
 			}
 
+		} else {
+			g.upgrades = card.DetectClick(&g.cards, g.upgrades, &g.player.Cadence, &g.player.Speed, &g.player.ShootRange, &g.clicPrecedent, &g.player.PickupRadius, &g.player.MaxHealth, &g.player.Lifes)
+
+			ebiten.SetCursorMode(ebiten.CursorModeVisible)
 		}
 	} else {
 		touches := inpututil.AppendJustPressedKeys(nil)
@@ -293,8 +299,6 @@ func (g *Game) Update() error {
 			g.reset()
 		}
 	}
-
-	g.upgrades = card.DetectClick(&g.cards, g.upgrades, &g.player.Cadence, &g.player.Speed, &g.player.ShootRange, &g.clicPrecedent, &g.player.PickupRadius, &g.player.MaxHealth, &g.player.Lifes)
 
 	return nil
 }
